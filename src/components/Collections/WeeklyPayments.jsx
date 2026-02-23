@@ -278,37 +278,39 @@ export default function WeeklyPayments() {
           role={isPendingSection ? 'button' : undefined}
           aria-expanded={isPendingSection ? isPendingExpanded : undefined}
         >
-          <div className="flex items-start gap-3">
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
-              {group.borrower_name?.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-base font-bold text-gray-900 dark:text-white">
-                  {group.borrower_name}
-                </h3>
-                <span className="px-2 py-0.5 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded">
-                  Loan {group.loan_number ?? 1}
-                </span>
+          <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+            <div className="flex items-start gap-3 flex-1 min-w-0">
+              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary-500 to-accent-500 flex items-center justify-center text-white font-semibold text-sm flex-shrink-0">
+                {group.borrower_name?.charAt(0).toUpperCase()}
               </div>
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {group.borrower_phone && (
-                  <a
-                    href={`tel:${group.borrower_phone}`}
-                    className="flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:underline"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Phone className="w-3 h-3" />
-                    {group.borrower_phone}
-                  </a>
-                )}
-                {group.borrower_area && <span>{group.borrower_area}</span>}
-                {group.borrower_leader_tag && <span>{group.borrower_leader_tag}</span>}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white">
+                    {group.borrower_name}
+                  </h3>
+                  <span className="px-2 py-0.5 text-xs font-semibold bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 rounded flex-shrink-0">
+                    Loan {group.loan_number ?? 1}
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500 dark:text-gray-400 mt-1">
+                  {group.borrower_phone && (
+                    <a
+                      href={`tel:${group.borrower_phone}`}
+                      className="flex items-center gap-1 text-primary-600 dark:text-primary-400 hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Phone className="w-3 h-3" />
+                      {group.borrower_phone}
+                    </a>
+                  )}
+                  {group.borrower_area && <span>{group.borrower_area}</span>}
+                  {group.borrower_leader_tag && <span>{group.borrower_leader_tag}</span>}
+                </div>
               </div>
             </div>
             {/* Loan total for this section */}
-            <div className="text-right flex-shrink-0 flex items-center gap-2">
-              <div>
+            <div className="flex items-center justify-between sm:justify-end gap-2 pl-13 sm:pl-0">
+              <div className="text-left sm:text-right whitespace-nowrap">
                 <p className={`text-sm font-bold tabular-nums ${
                   isCollectedSection ? 'text-green-600 dark:text-green-400'
                   : isPendingSection ? 'text-red-600 dark:text-red-400'
@@ -319,10 +321,10 @@ export default function WeeklyPayments() {
                     : formatCurrency(group.payments.reduce((s, p) => s + parseFloat(p.amount_due || 0), 0))
                 }
                 </p>
-                <p className="text-[10px] text-gray-400">
+                <p className="text-[10px] text-gray-400 whitespace-nowrap">
                   {isPendingSection
-                    ? `${group.payments.length} week${group.payments.length !== 1 ? 's' : ''} pending`
-                    : `${group.payments.length} payment${group.payments.length !== 1 ? 's' : ''}`}
+                    ? `${group.payments.length} week${group.payments.length !== 1 ? 's' : ''}`
+                    : `${group.payments.length} pmt${group.payments.length !== 1 ? 's' : ''}`}
                 </p>
               </div>
               {isPendingSection && (

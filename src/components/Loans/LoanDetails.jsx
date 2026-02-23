@@ -241,7 +241,9 @@ export default function LoanDetails({ loanId, onClose, onUpdate }) {
   }
 
   const unpaidPayments = payments.filter(p => p.status !== 'paid')
-  const pendingAmount = unpaidPayments.reduce((sum, p) => sum + (parseFloat(p.amount_due || 0) - parseFloat(p.amount_paid || 0)), 0)
+  // Calculate true pending amount: total loan amount minus total paid
+  // This correctly handles extra payments
+  const pendingAmount = Math.max(0, parseFloat(loan.total_amount || 0) - totalPaid)
   const pendingWeeksCount = unpaidPayments.length
   const weeklyAmount = parseFloat(loan.weekly_amount || 0)
   const weeksByCost = weeklyAmount > 0 ? Math.ceil(pendingAmount / weeklyAmount) : 0

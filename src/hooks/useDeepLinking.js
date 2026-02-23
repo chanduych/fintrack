@@ -17,47 +17,43 @@ export function useDeepLinking() {
 
       console.log('Deep link received:', url)
 
-      // Handle Supabase OAuth redirect
-      if (url.includes('#access_token') || url.includes('access_token=')) {
-        try {
-          // Extract hash or query params
-          let params
-          if (url.includes('#')) {
-            const hash = url.split('#')[1]
-            params = new URLSearchParams(hash)
-          } else if (url.includes('?')) {
-            const query = url.split('?')[1]
-            params = new URLSearchParams(query)
+      // Handle Supabase OAuth redirect: PKCE sends ?code=..., implicit sends access_token (hash or query)
+      const hasAuthData = url.includes('code=') || url.includes('#access_token') || url.includes('access_token=')
+      if (!hasAuthData) return
+
+      try {
+        const queryPart = url.includes('?') ? url.split('?')[1].split('#')[0] : ''
+        const hashPart = url.includes('#') ? url.split('#')[1] : ''
+        const params = new URLSearchParams(queryPart || hashPart)
+
+        const code = params.get('code')
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+          if (error) {
+            console.error('Error exchanging code for session:', error)
+          } else {
+            console.log('Session set successfully (PKCE)', data)
           }
-
-          if (params) {
-            const access_token = params.get('access_token')
-            const refresh_token = params.get('refresh_token')
-
-            console.log('Extracted tokens:', {
-              has_access: !!access_token,
-              has_refresh: !!refresh_token
-            })
-
-            if (access_token && refresh_token) {
-              // Set the session with proper token format
-              const { data, error } = await supabase.auth.setSession({
-                access_token,
-                refresh_token
-              })
-
-              if (error) {
-                console.error('Error setting session:', error)
-              } else {
-                console.log('Session set successfully:', data)
-              }
-            } else {
-              console.error('Missing tokens in deep link')
-            }
-          }
-        } catch (error) {
-          console.error('Error handling deep link:', error)
+          return
         }
+
+        const access_token = params.get('access_token')
+        const refresh_token = params.get('refresh_token')
+        if (access_token && refresh_token) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token,
+            refresh_token
+          })
+          if (error) {
+            console.error('Error setting session:', error)
+          } else {
+            console.log('Session set successfully', data)
+          }
+        } else {
+          console.error('Missing tokens in deep link')
+        }
+      } catch (err) {
+        console.error('Error handling deep link:', err)
       }
     }
 

@@ -12,7 +12,7 @@ export const createAutoBackup = async (userId, userEmail) => {
     const [borrowersRes, loansRes, paymentsRes, settingsRes] = await Promise.all([
       supabase.from('borrowers').select('*').eq('user_id', userId).order('name'),
       supabase.from('loans').select('*').eq('user_id', userId).order('created_at', { ascending: false }),
-      supabase.from('payments').select('payments.*, loan:loans!inner(user_id)').eq('loan.user_id', userId).order('due_date'),
+      supabase.from('payments').select('*, loans!inner(user_id)').eq('loans.user_id', userId).order('due_date'),
       supabase.from('settings').select('*').eq('user_id', userId).single()
     ])
 
