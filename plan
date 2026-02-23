@@ -1,0 +1,896 @@
+User approved Claude's plan      
+  ⎿  Plan saved to: ~/.claude/plans/reactive-meandering-storm.md · /plan to edit                                                    
+     Finance Tracker - Loan Management Application Plan
+                                                                                                                                        
+     Context                         
+                                                                                                                                        
+     This is a mobile-first loan management application for a weekly collection business model. The business works by lending money   
+      (e.g., ₹10,000) that is repaid in weekly installments (e.g., ₹500/week for 24 weeks, total ₹12,000 including ₹2,000
+     interest). Collections happen weekly (default: Sundays), and the application needs to track multiple borrowers, their loan
+     accounts, weekly payments, and provide analytics.
+
+     The application will reuse components and patterns from the existing my-investment-tracker project, which already has:
+     - Authentication with Google OAuth via Supabase
+     - Mobile-first responsive design with bottom navigation
+     - Real-time data sync with Supabase
+     - Toast notifications and modals
+     - Dark mode support
+     - Comprehensive styling system
+
+     Requirements Summary
+
+     Core Features
+
+     1. Authentication: Google OAuth (single user, extensible to agent login)
+     2. Loan User Management: Create and manage borrower profiles with name, area, phone, leader tag
+     3. Loan Accounts: Track loans with principal amount, weekly repayment schedule, due dates, payment status
+     4. Weekly Collections: Track week-by-week payments with due dates and actual paid dates
+     5. Analytics Dashboard: Total outstanding amounts, this week's collections, closed loans, foreclosure tracking
+     6. Settings: Configure number of weeks, collection day, automatic recalculation
+
+     Business Logic - CLARIFIED
+
+     - Loan structure: User enters principal amount (e.g., ₹10k) → System auto-calculates weekly amount based on formula:
+       - ₹10k → ₹500/week (24 weeks standard)
+       - ₹20k → ₹1000/week (24 weeks standard)
+       - Formula: Weekly = Principal × 0.05 (5% of principal per week for standard duration)
+     - Interest/Weeks adjustment: Configurable in settings
+       - If user changes weeks from 24 to 25, system adds one extra payment
+       - Example: ₹10k loan at 24 weeks = ₹500/week, if changed to 25 weeks, week 25 gets ₹500 added
+       - Total amount = Weekly amount × Number of weeks
+     - Collection day: Default Sunday, configurable
+     - Multiple concurrent loans: Borrowers can have multiple active loans simultaneously
+     - Partial payments: Allowed anytime - user can pay any amount, balance carries forward
+     - Foreclosure: Mark remaining payments as 'foreclosed' status with settlement amount, keep full schedule visible
+
+     Technology Stack
+
+     Frontend
+
+     - Framework: React 19.2.0 + Vite 7.2.4
+     - Styling: Tailwind CSS 4.1.18 (reuse design system from my-investment-tracker)
+     - Icons: Lucide React
+     - State Management: React Context API + Custom Hooks
+     - Date Handling: date-fns (to be added)
+     - Mobile: Progressive Web App (PWA) capabilities
+
+     Backend
+
+     - Database: Supabase (PostgreSQL)
+     - Authentication: Supabase Auth with Google OAuth
+     - Real-time: Supabase subscriptions for live updates
+
+     Reusable Components from my-investment-tracker
+
+     - AuthContext.jsx - Authentication state management
+     - Auth/LoginForm.jsx - Login with Google OAuth
+     - MobileLayout.jsx - Bottom navigation shell
+     - ConfirmationModal.jsx - Confirmation dialogs
+     - Toast.jsx + useToast - Notifications
+     - SkeletonLoader.jsx - Loading states
+     - index.css - Complete styling system with animations
+     - supabaseService.js - Database service patterns
+     - useLocalStorage.js - Local persistence
+     - formatters.js - Currency and date formatting utilities
+
+     Database Schema (Supabase)
+
+     Tables
+
+     1. users (managed by Supabase Auth)
+
+     - Standard Supabase auth table
+     - Enhanced with user profile data
+
+     2. user_profiles
+
+     - id (uuid, primary key)
+     - user_id (uuid, references auth.users) - The lender/admin
+     - full_name (text)
+     - phone (text)
+     - created_at (timestamp)
+     - updated_at (timestamp)
+
+     3. borrowers
+
+     - id (uuid, primary key)
+     - user_id (uuid, references auth.users) - Who created this borrower
+     - name (text, required)
+     - area (text, required)
+     - phone (text, required)
+     - leader_tag (text) - For grouping/sorting
+     - is_active (boolean, default true)
+     - created_at (timestamp)
+     - updated_at (timestamp)
+
+     4. loans
+
+     - id (uuid, primary key)
+     - borrower_id (uuid, references borrowers)
+     - user_id (uuid, references auth.users)
+     - principal_amount (decimal, required) - Original loan amount (e.g., ₹10,000)
+     - weekly_amount (decimal, required) - Amount per week (auto-calculated: principal × 0.05)
+     - number_of_weeks (integer, required) - Total installments (default from settings)
+     - total_amount (decimal, computed) - weekly_amount × number_of_weeks
+     - start_date (date, required) - Loan start date
+     - collection_day (integer, 0-6) - Day of week (0=Sunday)
+     - status (text) - 'active', 'closed', 'foreclosed'
+     - foreclosure_date (date, nullable)
+     - foreclosure_amount (decimal, nullable)
+     - foreclosure_settlement_amount (decimal, nullable) - Amount paid to close early
+     - notes (text)
+     - created_at (timestamp)
+     - updated_at (timestamp)
+
+     5. payments
+
+     - id (uuid, primary key)
+     - loan_id (uuid, references loans)
+     - week_number (integer, required) - Week number (1, 2, 3...)
+     - due_date (date, required)
+     - amount_due (decimal, required)
+     - amount_paid (decimal, default 0)
+     - balance (decimal, computed) - amount_due - amount_paid
+     - paid_date (date, nullable) - When full/partial payment recorded
+     - status (text) - 'pending', 'paid', 'partial', 'overdue', 'foreclosed'
+     - notes (text)
+     - created_at (timestamp)
+     - updated_at (timestamp)
+
+     6. settings
+
+     - id (uuid, primary key)
+     - user_id (uuid, references auth.users)
+     - default_weeks (integer, default 24) - Default loan duration
+     - weekly_rate (decimal, default 0.05) - Percentage of principal per week (5% = 0.05)
+     - default_collection_day (integer, default 0) - 0=Sunday
+     - created_at (timestamp)
+     - updated_at (timestamp)
+
+     Note on weekly_rate:
+     - Default 0.05 means weekly payment = principal × 0.05
+     - For ₹10k: 10000 × 0.05 = ₹500/week
+     - For ₹20k: 20000 × 0.05 = ₹1000/week
+     - Adjustable in settings for different interest models
+
+     Row Level Security (RLS) Policies
+
+     All tables will have RLS enabled with policies ensuring users can only access their own data:
+     - SELECT: WHERE user_id = auth.uid()
+     - INSERT: WITH CHECK (user_id = auth.uid())
+     - UPDATE: WHERE user_id = auth.uid()
+     - DELETE: WHERE user_id = auth.uid()
+
+     Application Structure
+
+     fintrack/
+     ├── src/
+     │   ├── components/
+     │   │   ├── Auth/                    [REUSE]
+     │   │   │   ├── AuthPage.jsx
+     │   │   │   ├── LoginForm.jsx
+     │   │   │   └── SignupForm.jsx
+     │   │   ├── Borrowers/              [NEW]
+     │   │   │   ├── BorrowersList.jsx
+     │   │   │   ├── BorrowerCard.jsx
+     │   │   │   ├── AddBorrowerModal.jsx
+     │   │   │   └── BorrowerDetails.jsx
+     │   │   ├── Loans/                  [NEW]
+     │   │   │   ├── LoansList.jsx
+     │   │   │   ├── LoanCard.jsx
+     │   │   │   ├── AddLoanModal.jsx
+     │   │   │   ├── LoanDetails.jsx
+     │   │   │   └── PaymentSchedule.jsx
+     │   │   ├── Payments/               [NEW]
+     │   │   │   ├── PaymentRow.jsx
+     │   │   │   ├── RecordPaymentModal.jsx
+     │   │   │   └── WeeklyCollections.jsx
+     │   │   ├── Analytics/              [NEW]
+     │   │   │   ├── AnalyticsDashboard.jsx
+     │   │   │   ├── StatsCards.jsx
+     │   │   │   └── LoansChart.jsx
+     │   │   ├── Settings/               [NEW]
+     │   │   │   ├── SettingsModal.jsx
+     │   │   │   └── SettingsForm.jsx
+     │   │   ├── Layout/                 [REUSE]
+     │   │   │   └── MobileLayout.jsx
+     │   │   └── Common/                 [REUSE]
+     │   │       ├── Toast.jsx
+     │   │       ├── ConfirmationModal.jsx
+     │   │       └── SkeletonLoader.jsx
+     │   ├── contexts/                   [REUSE/ADAPT]
+     │   │   ├── AuthContext.jsx
+     │   │   └── LoanContext.jsx        [NEW]
+     │   ├── hooks/                      [REUSE/NEW]
+     │   │   ├── useToast.js            [REUSE]
+     │   │   ├── useLocalStorage.js     [REUSE]
+     │   │   ├── useDarkMode.js         [REUSE]
+     │   │   ├── useLoans.js            [NEW]
+     │   │   ├── useBorrowers.js        [NEW]
+     │   │   └── usePayments.js         [NEW]
+     │   ├── services/                   [ADAPT]
+     │   │   ├── supabaseClient.js      [REUSE]
+     │   │   ├── loanService.js         [NEW]
+     │   │   ├── borrowerService.js     [NEW]
+     │   │   └── paymentService.js      [NEW]
+     │   ├── utils/                      [REUSE/NEW]
+     │   │   ├── formatters.js          [REUSE]
+     │   │   ├── dateUtils.js           [NEW]
+     │   │   ├── loanCalculations.js    [NEW]
+     │   │   └── validators.js          [NEW]
+     │   ├── index.css                   [REUSE]
+     │   ├── App.jsx                     [NEW]
+     │   └── main.jsx                    [ADAPT]
+     ├── .env.example
+     ├── .env.local
+     ├── package.json
+     ├── vite.config.js
+     ├── tailwind.config.js
+     └── index.html
+
+     Implementation Phases
+
+     Phase 1: Project Setup & Authentication
+
+     Files to create/modify:
+     - Initialize Vite + React project
+     - Copy styling system from my-investment-tracker (index.css)
+     - Set up Tailwind config
+     - Copy and adapt AuthContext.jsx and Auth components
+     - Set up Supabase client configuration
+     - Create environment configuration (.env.example, .env.local)
+
+     Dependencies:
+     {
+       "react": "^19.2.0",
+       "react-dom": "^19.2.0",
+       "vite": "^7.2.4",
+       "tailwindcss": "^4.1.18",
+       "@supabase/supabase-js": "^2.x",
+       "lucide-react": "^0.562.0",
+       "date-fns": "^3.x",
+       "papaparse": "^5.5.3",
+       "xlsx": "^0.18.5"
+     }
+
+     Verification:
+     - User can access auth page
+     - Google OAuth login works
+     - Session persists on refresh
+
+     Phase 2: Database Setup (Supabase)
+
+     Tasks:
+     - Create all tables with schema defined above
+     - Set up RLS policies
+     - Create database functions for:
+       - Auto-generating payment schedules on loan creation
+       - Updating loan status based on payment completion
+       - Calculating overdue payments
+     - Create indexes for performance:
+       - borrowers.user_id, borrowers.area, borrowers.leader_tag
+       - loans.borrower_id, loans.user_id, loans.status
+       - payments.loan_id, payments.due_date, payments.status
+
+     Verification:
+     - Tables created successfully
+     - RLS policies restrict access correctly
+     - Sample data can be inserted and queried
+
+     Phase 3: Borrower Management
+
+     Files to create:
+     - services/borrowerService.js - CRUD operations
+     - hooks/useBorrowers.js - State management
+     - components/Borrowers/BorrowersList.jsx - List view with sorting
+     - components/Borrowers/BorrowerCard.jsx - Individual card
+     - components/Borrowers/AddBorrowerModal.jsx - Create/edit form
+     - utils/validators.js - Phone number validation
+
+     Features:
+     - Add/edit/delete borrowers
+     - Sort by leader tag and area
+     - Search by name/phone/area
+     - View borrower details with loan history
+
+     Reused components:
+     - ConfirmationModal for deletions
+     - Toast for success/error messages
+     - SkeletonLoader for loading states
+
+     Verification:
+     - Can create borrowers with all fields
+     - Sorting by area and leader tag works
+     - Search filters correctly
+     - Delete requires confirmation
+
+     Phase 4: Loan Management
+
+     Files to create:
+     - services/loanService.js - Loan CRUD and calculations
+     - hooks/useLoans.js - State management with real-time updates
+     - components/Loans/AddLoanModal.jsx - Loan creation form
+     - components/Loans/LoanCard.jsx - Loan summary card
+     - components/Loans/LoanDetails.jsx - Full loan view
+     - components/Loans/PaymentSchedule.jsx - Week-by-week schedule
+     - utils/loanCalculations.js - Interest, weekly amount calculations
+     - utils/dateUtils.js - Due date calculations
+
+     Features:
+     - Create loan with principal amount and number of weeks
+     - Auto-calculate weekly installment: principal × weekly_rate (from settings)
+     - Auto-generate full payment schedule (database trigger)
+     - Show loan status: active, closed, foreclosed
+     - Display weeks pending and payment progress
+     - Foreclosure with settlement amount
+     - Support multiple concurrent loans per borrower
+
+     Business Logic - UPDATED:
+     - Weekly amount calculation:
+       - weeklyAmount = principalAmount × weeklyRate
+       - Default weeklyRate = 0.05 (5%)
+       - Example: ₹10,000 × 0.05 = ₹500/week
+       - Example: ₹20,000 × 0.05 = ₹1,000/week
+     - Total repayment:
+       - totalAmount = weeklyAmount × numberOfWeeks
+       - Example: ₹500/week × 24 weeks = ₹12,000
+     - Interest earned:
+       - interestAmount = totalAmount - principalAmount
+       - Example: ₹12,000 - ₹10,000 = ₹2,000 interest
+     - Week adjustment:
+       - If settings change from 24 → 25 weeks:
+       - Add one more payment of weeklyAmount
+       - New total = ₹500 × 25 = ₹12,500
+     - Due dates:
+       - Calculated from start_date + (week_number × 7 days)
+       - Adjusted to collection day of week (default Sunday)
+     - Partial payments:
+       - Balance = amountDue - amountPaid
+       - Status = 'partial' if 0 < amountPaid < amountDue
+       - Balance carries forward to track cumulative debt
+
+     Verification:
+     - Loan creation generates full payment schedule
+     - Weekly amounts calculated correctly
+     - Due dates align with collection day
+     - Foreclosure marks loan as closed with settlement
+
+     Phase 5: Payment Tracking
+
+     Files to create:
+     - services/paymentService.js - Payment CRUD
+     - hooks/usePayments.js - Payment state management
+     - components/Payments/RecordPaymentModal.jsx - Record payment form
+     - components/Payments/PaymentRow.jsx - Single payment entry
+     - components/Payments/WeeklyCollections.jsx - This week's collections view
+
+     Features:
+     - Record full payment (marks as paid)
+     - Record partial payment (updates amount_paid)
+     - Mark overdue payments (auto-calculated)
+     - View unpaid this week
+     - Edit/delete payments
+     - Payment history for each loan
+
+     Business Logic:
+     - Status transitions: pending → paid/partial/overdue
+     - Overdue if due_date < today AND status = pending
+     - Loan closes when all payments are paid
+     - Show pending weeks count
+
+     Verification:
+     - Recording payment updates loan progress
+     - Partial payments tracked correctly
+     - Overdue status updates automatically
+     - All payments paid closes the loan
+
+     Phase 6: Analytics Dashboard
+
+     Files to create:
+     - components/Analytics/AnalyticsDashboard.jsx - Main dashboard
+     - components/Analytics/StatsCards.jsx - Metric cards (reuse pattern)
+     - components/Analytics/LoansChart.jsx - Visual charts (optional)
+
+     Metrics to display:
+     1. Total Outstanding
+       - Principal amount out (excluding interest)
+       - Total amount out (including interest)
+     2. This Week Collections
+       - Amount due this week
+       - Amount collected this week
+       - Unpaid this week
+     3. Loan Statistics
+       - Active loans count
+       - Closed loans count
+       - Foreclosed loans count
+     4. Payment Status
+       - On-time payments
+       - Overdue payments
+       - Total interest earned
+
+     Verification:
+     - All metrics calculated correctly
+     - Real-time updates on payment recording
+     - Filters by date range work
+
+     Phase 7: Settings & Configuration
+
+     Files to create:
+     - services/settingsService.js - Settings CRUD
+     - services/exportService.js - Export/import data operations
+     - components/Settings/SettingsModal.jsx - Settings UI with tabs
+     - components/Settings/SettingsForm.jsx - General settings
+     - components/Settings/ExportImportSection.jsx - Data management
+     - utils/dataExport.js - CSV/JSON/Excel export utilities
+     - utils/dataImport.js - Import and validation
+
+     Settings Tabs:
+
+     1. General Settings
+       - Default number of weeks (e.g., 24)
+       - Weekly rate (default 0.05 = 5%)
+       - Default collection day (Sunday = 0, Monday = 1, etc.)
+     2. Export/Import
+       - Export Options:
+           - Export all data (JSON format) - Complete backup
+         - Export borrowers (CSV)
+         - Export loans (CSV)
+         - Export payments (CSV)
+         - Export analytics report (Excel) - Summary + details
+         - Date range filter for exports
+       - Import Options:
+           - Import borrowers (CSV)
+         - Import loans (CSV)
+         - Validation and preview before import
+         - Duplicate detection and merge options
+     3. Auto Backup (Supabase Scheduled)
+       - Enable/disable auto backup
+       - Backup frequency (Daily/Weekly/Monthly)
+       - Backup destination (Email/Cloud Storage/Download)
+       - Last backup date/time
+       - Manual backup trigger button
+
+     Supabase Periodic Export Implementation:
+
+     Two approaches:
+
+     Option 1: Supabase Edge Functions + Cron (Recommended)
+     // supabase/functions/scheduled-backup/index.ts
+     import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
+     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+
+     // Triggered by Supabase Cron (pg_cron extension)
+     serve(async (req) => {
+       const supabase = createClient(...)
+
+       // Fetch all user data
+       const { data: borrowers } = await supabase.from('borrowers').select('*')
+       const { data: loans } = await supabase.from('loans').select('*')
+       const { data: payments } = await supabase.from('payments').select('*')
+
+       // Create backup file
+       const backup = { borrowers, loans, payments, exportDate: new Date() }
+
+       // Option A: Store in Supabase Storage
+       await supabase.storage
+         .from('backups')
+         .upload(`backup-${Date.now()}.json`, JSON.stringify(backup))
+
+       // Option B: Send via email using Resend/SendGrid
+       // await sendEmail(userEmail, 'Your FinTrack Backup', attachment)
+
+       return new Response('Backup completed', { status: 200 })
+     })
+
+     Schedule via pg_cron:
+     -- Daily backup at 2 AM
+     SELECT cron.schedule(
+       'daily-backup',
+       '0 2 * * *',
+       $$
+       SELECT net.http_post(
+         url:='YOUR_EDGE_FUNCTION_URL',
+         headers:='{"Content-Type": "application/json"}'::jsonb
+       );
+       $$
+     );
+
+     Option 2: Client-side Scheduled Backup
+     - Use browser's localStorage + service worker
+     - Trigger export on app open if X days passed
+     - Store in IndexedDB or download locally
+     - Simpler but requires user to open app
+
+     Verification:
+     - Settings save and persist
+     - New loans use default settings
+     - Collection day updates future due dates
+     - Export generates correct CSV/Excel files
+     - Import validates and handles duplicates
+     - Auto backup runs on schedule
+
+     Phase 8: Mobile Layout & Navigation
+
+     Files to adapt:
+     - components/Layout/MobileLayout.jsx - Bottom navigation
+     - App.jsx - Route management
+
+     Navigation Structure (Bottom Nav):
+     1. Home (Dashboard/Analytics) - Icon: Home
+     2. Borrowers (Borrower List) - Icon: Users
+     3. Add (Quick action: Add Loan/Borrower) - Icon: Plus (FAB)
+     4. Collections (This Week Collections) - Icon: Wallet
+     5. Settings - Icon: Settings
+
+     Verification:
+     - Bottom navigation works on mobile
+     - Page transitions smooth
+     - All screens accessible
+     - Safe area padding on notched devices
+
+     Phase 9: Testing & Polish
+
+     Tasks:
+     - Add loading states to all data fetches
+     - Error handling for all API calls
+     - Form validation with helpful error messages
+     - Empty states for lists
+     - Offline support with localStorage fallback
+     - PWA configuration (manifest, service worker)
+     - Performance optimization (lazy loading, memoization)
+
+     Testing Scenarios:
+     1. Create borrower → Create loan → Record payments → Close loan
+     2. Multiple loans for same borrower
+     3. Foreclosure scenario
+     4. Overdue payment handling
+     5. Settings change affects new loans
+     6. Google OAuth login/logout flow
+     7. Offline mode with localStorage
+
+     Verification:
+     - No console errors
+     - Fast load times
+     - Works offline
+     - Mobile responsive on all screen sizes
+
+     Key Calculations & Formulas
+
+     Loan Calculations - UPDATED
+
+     // Weekly installment (based on principal and rate)
+     weeklyAmount = principalAmount × weeklyRate
+     // Example: ₹10,000 × 0.05 = ₹500/week
+
+     // Total amount to be repaid
+     totalAmount = weeklyAmount × numberOfWeeks
+     // Example: ₹500 × 24 weeks = ₹12,000
+
+     // Interest amount earned
+     interestAmount = totalAmount - principalAmount
+     // Example: ₹12,000 - ₹10,000 = ₹2,000
+
+     // When settings change weeks (e.g., 24 → 25)
+     if (numberOfWeeks increases) {
+       // Add extra payment for new week
+       newWeekPayment = weeklyAmount
+       totalAmount = weeklyAmount × newNumberOfWeeks
+     }
+
+     // Total outstanding (principal only)
+     outstandingPrincipal = Σ(activeLoan.principalAmount - totalAmountPaidForLoan)
+
+     // Total outstanding (including interest)
+     outstandingTotal = Σ(activeLoan.totalAmount - totalAmountPaidForLoan)
+
+     // Pending weeks
+     pendingWeeks = payments.filter(p => p.status === 'pending' || p.status === 'partial' || p.status === 'overdue').length
+
+     // Partial payment balance
+     paymentBalance = amountDue - amountPaid
+
+     Due Date Calculations
+
+     // Calculate due date for week N
+     function calculateDueDate(startDate, weekNumber, collectionDay) {
+       // Start from loan start date
+       let dueDate = addWeeks(startDate, weekNumber - 1)
+
+       // Adjust to collection day of week
+       let dayOfWeek = getDay(dueDate)
+       let daysToAdd = (collectionDay - dayOfWeek + 7) % 7
+
+       if (weekNumber === 1 && daysToAdd > 0) {
+         // First payment, move forward to collection day
+         dueDate = addDays(dueDate, daysToAdd)
+       } else if (weekNumber > 1) {
+         // Subsequent payments, exactly 7 days after previous
+         dueDate = addWeeks(startDate, weekNumber - 1)
+       }
+
+       return dueDate
+     }
+
+     Payment Status Logic - UPDATED
+
+     function updatePaymentStatus(payment, today, loanStatus) {
+       // If loan is foreclosed, mark remaining payments
+       if (loanStatus === 'foreclosed' && payment.amountPaid === 0) {
+         return 'foreclosed'
+       }
+
+       // Normal payment status logic
+       if (payment.amountPaid >= payment.amountDue) {
+         return 'paid'
+       } else if (payment.amountPaid > 0) {
+         return 'partial'
+       } else if (payment.dueDate < today) {
+         return 'overdue'
+       }
+       return 'pending'
+     }
+
+     // Foreclosure logic
+     function forecloseLoan(loan, settlementAmount) {
+       loan.status = 'foreclosed'
+       loan.foreclosureDate = today
+       loan.foreclosureSettlementAmount = settlementAmount
+
+       // Mark all unpaid payments as 'foreclosed'
+       unpaidPayments = payments.filter(p => p.amountPaid < p.amountDue)
+       unpaidPayments.forEach(p => p.status = 'foreclosed')
+     }
+
+     Export/Import Data Formats
+
+     CSV Formats
+
+     Borrowers Export (borrowers.csv):
+     id,name,area,phone,leader_tag,is_active,created_at
+     uuid-1234,Rajesh Kumar,North Area,9876543210,Leader A,true,2026-01-15
+     uuid-5678,Priya Singh,South Area,9876543211,Leader B,true,2026-01-20
+
+     Loans Export (loans.csv):
+     id,borrower_id,borrower_name,principal_amount,weekly_amount,number_of_weeks,total_amount,start_date,status
+     uuid-loan1,uuid-1234,Rajesh Kumar,10000,500,24,12000,2026-01-15,active
+     uuid-loan2,uuid-5678,Priya Singh,20000,1000,24,24000,2026-01-20,active
+
+     Payments Export (payments.csv):
+     loan_id,borrower_name,week_number,due_date,amount_due,amount_paid,balance,paid_date,status
+     uuid-loan1,Rajesh Kumar,1,2026-01-19,500,500,0,2026-01-19,paid
+     uuid-loan1,Rajesh Kumar,2,2026-01-26,500,300,200,2026-01-26,partial
+     uuid-loan1,Rajesh Kumar,3,2026-02-02,500,0,500,null,pending
+
+     JSON Full Backup Format
+
+     {
+       "exportDate": "2026-02-22T10:30:00Z",
+       "version": "1.0",
+       "user": {
+         "id": "user-uuid",
+         "email": "user@example.com"
+       },
+       "borrowers": [
+         {
+           "id": "uuid-1234",
+           "name": "Rajesh Kumar",
+           "area": "North Area",
+           "phone": "9876543210",
+           "leader_tag": "Leader A",
+           "is_active": true,
+           "created_at": "2026-01-15T00:00:00Z"
+         }
+       ],
+       "loans": [
+         {
+           "id": "uuid-loan1",
+           "borrower_id": "uuid-1234",
+           "principal_amount": 10000,
+           "weekly_amount": 500,
+           "number_of_weeks": 24,
+           "total_amount": 12000,
+           "start_date": "2026-01-15",
+           "collection_day": 0,
+           "status": "active"
+         }
+       ],
+       "payments": [
+         {
+           "id": "uuid-pay1",
+           "loan_id": "uuid-loan1",
+           "week_number": 1,
+           "due_date": "2026-01-19",
+           "amount_due": 500,
+           "amount_paid": 500,
+           "balance": 0,
+           "paid_date": "2026-01-19",
+           "status": "paid"
+         }
+       ],
+       "settings": {
+         "default_weeks": 24,
+         "weekly_rate": 0.05,
+         "default_collection_day": 0
+       }
+     }
+
+     Excel Report Format (analytics-report.xlsx)
+
+     Sheet 1: Summary
+     - Total loans: 45
+     - Active loans: 30
+     - Closed loans: 10
+     - Foreclosed: 5
+     - Total principal out: ₹4,50,000
+     - Total outstanding: ₹5,40,000
+     - Interest earned: ₹90,000
+
+     Sheet 2: Loans
+     - Full loans list with calculations
+
+     Sheet 3: This Week Collections
+     - Due this week: ₹45,000
+     - Collected: ₹30,000
+     - Pending: ₹15,000
+
+     Sheet 4: Overdue Payments
+     - List of all overdue payments with borrower details
+
+     Data Flow Architecture
+
+     User Interaction
+           ↓
+     React Component
+           ↓
+     Custom Hook (useLoans, useBorrowers, usePayments)
+           ↓
+     Service Layer (loanService, borrowerService, paymentService, exportService)
+           ↓
+     Supabase Client
+           ↓
+     PostgreSQL Database
+           ↓
+     Real-time Subscriptions (Supabase)
+           ↓
+     Custom Hook Updates
+           ↓
+     Component Re-renders
+
+     Export Flow:
+     Component → exportService → Format Data → Generate File (CSV/JSON/Excel) → Download
+
+     Import Flow:
+     Upload File → Parse (CSV/JSON) → Validate → Preview → User Confirms → Import to DB
+
+     Security Considerations
+
+     1. Row Level Security (RLS): All tables enforce user_id checks
+     2. Input Validation: Client-side validation for all forms
+     3. Phone Number Privacy: Mask phone numbers in public views
+     4. SQL Injection Prevention: Use parameterized queries (Supabase handles this)
+     5. XSS Prevention: React's automatic escaping + validate user inputs
+
+     Performance Optimization
+
+     1. Lazy Loading: Components loaded on-demand
+     2. Memoization: useMemo for expensive calculations
+     3. Debouncing: Search inputs debounced (300ms)
+     4. Pagination: Borrower/Loan lists paginated (50 per page)
+     5. Indexes: Database indexes on foreign keys and common queries
+     6. Local Caching: useLocalStorage for settings and recent data
+
+     Future Enhancements (Post-MVP)
+
+     1. Multi-user support: Agent login with different permissions (role-based access)
+     2. SMS Reminders: Send payment reminders via SMS (Twilio integration)
+     3. Receipt Generation: PDF receipts for payments (jsPDF)
+     4. Expense Tracking: Track business expenses (cash out)
+     5. Advanced Reports: Monthly/yearly reports with charts (Recharts)
+     6. WhatsApp Integration: Payment reminders via WhatsApp Business API
+     7. Photo Uploads: Attach documents to loans (Supabase Storage)
+     8. Installment Rescheduling: Adjust schedule for holidays
+     9. Multi-currency: Support for different currencies
+     10. Cloud Backup Sync: Google Drive / Dropbox integration
+     11. Offline Mode: Full offline functionality with sync
+     12. Push Notifications: Browser/PWA notifications for due payments
+
+     Critical Files for Implementation
+
+     Reuse from my-investment-tracker
+
+     - /src/contexts/AuthContext.jsx
+     - /src/components/Auth/AuthPage.jsx
+     - /src/components/Auth/LoginForm.jsx
+     - /src/components/MobileLayout.jsx
+     - /src/components/Toast.jsx
+     - /src/components/ConfirmationModal.jsx
+     - /src/hooks/useToast.js
+     - /src/hooks/useLocalStorage.js
+     - /src/utils/formatters.js
+     - /src/index.css
+
+     Create New
+
+     - /src/services/loanService.js
+     - /src/services/borrowerService.js
+     - /src/services/paymentService.js
+     - /src/services/exportService.js - Data export/import
+     - /src/hooks/useLoans.js
+     - /src/hooks/useBorrowers.js
+     - /src/utils/loanCalculations.js
+     - /src/utils/dateUtils.js
+     - /src/utils/dataExport.js - CSV/Excel generation
+     - /src/utils/dataImport.js - Import validation
+     - /src/components/Loans/AddLoanModal.jsx
+     - /src/components/Borrowers/BorrowersList.jsx
+     - /src/components/Analytics/AnalyticsDashboard.jsx
+     - /src/components/Settings/ExportImportSection.jsx
+     - /src/App.jsx
+     - /supabase/functions/scheduled-backup/index.ts - Auto backup edge function
+
+     Environment Variables
+
+     # Supabase
+     VITE_SUPABASE_URL=your_supabase_url
+     VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+
+     # App Config
+     VITE_APP_NAME=FinTrack
+
+     # Optional: Email service for backups (Resend/SendGrid)
+     VITE_EMAIL_SERVICE_KEY=your_email_api_key
+
+     # Optional: Cloud storage for backups
+     VITE_BACKUP_STORAGE_BUCKET=fintrack-backups
+
+     Supabase Storage Setup (for backups)
+
+     -- Create storage bucket for backups
+     INSERT INTO storage.buckets (id, name, public)
+     VALUES ('backups', 'backups', false);
+
+     -- Policy: Users can upload their own backups
+     CREATE POLICY "Users can upload backups"
+     ON storage.objects FOR INSERT
+     WITH CHECK (bucket_id = 'backups' AND auth.uid() = owner);
+
+     -- Policy: Users can read their own backups
+     CREATE POLICY "Users can read own backups"
+     ON storage.objects FOR SELECT
+     USING (bucket_id = 'backups' AND auth.uid() = owner);
+
+     Verification Strategy
+
+     End-to-End Test Flow
+
+     1. Setup: Login with Google OAuth
+     2. Borrower Management: Create 3 borrowers with different areas and leader tags
+     3. Loan Creation: Create loan for ₹10,000 with 24 weeks → Verify ₹500/week schedule
+     4. Payment Recording: Record 2 weeks of payments → Verify loan progress
+     5. Analytics: Check dashboard shows correct outstanding and collection data
+     6. Settings: Change default weeks to 20 → Create new loan → Verify recalculation
+     7. Foreclosure: Foreclose a loan early → Verify status changes
+     8. Filters: Sort borrowers by area → Search by name
+     9. Mobile: Test on mobile device → Verify touch targets and navigation
+     10. Offline: Disconnect internet → Verify localStorage fallback
+
+     Success Criteria
+
+     - All CRUD operations work without errors
+     - Calculations are accurate (weekly amounts, interest, outstanding)
+     - Real-time updates reflect immediately
+     - Mobile experience is smooth and responsive
+     - No data loss on refresh (localStorage backup)
+     - Authentication flow is seamless
+
+     ---
+     Summary
+
+     This plan leverages the robust architecture from my-investment-tracker while building a specialized loan management system.
+     The reuse of authentication, mobile layout, state management patterns, and styling will accelerate development significantly.
+     The database schema is designed for scalability and the business logic accurately models the weekly collection process with
+     flexible configuration options.
+
+     The implementation follows a phased approach starting with authentication and database setup, then building out core features
+     (borrowers, loans, payments), and finally adding analytics and polish. Each phase has clear verification criteria to ensure
+     quality.
