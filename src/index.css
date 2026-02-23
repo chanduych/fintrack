@@ -38,6 +38,11 @@ html {
 body {
   font-family: var(--font-display);
   line-height: 1.6;
+  /* Safe area insets for notches and status bars on mobile */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* Dark mode */

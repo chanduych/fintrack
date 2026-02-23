@@ -32,6 +32,7 @@ export default function WeeklyPayments() {
   const [foreclosureDate, setForeclosureDate] = useState('')
   const [foreclosureLoading, setForeclosureLoading] = useState(false)
   const [foreclosureError, setForeclosureError] = useState('')
+  const [showOtherWeeksCollected, setShowOtherWeeksCollected] = useState(false)
 
   // Get week date range
   const getWeekRange = (offset = 0) => {
@@ -108,6 +109,12 @@ export default function WeeklyPayments() {
   const paidThisWeekOnlyCollected = filteredCollectedPayments.filter(p => !paidIdsFromWeek.has(p.id))
   const thisWeekPaidCombined = [...thisWeekPaid, ...paidThisWeekOnlyCollected]
 
+  // NEW: Separate "this week paid" into: due this week vs other weeks
+  // Payments due this week and paid
+  const thisWeekDueAndPaid = thisWeekPaid
+  // Payments from other weeks collected this week
+  const otherWeeksCollectedThisWeek = paidThisWeekOnlyCollected
+
   // Stats - This Week (due this week)
   const weekDue = filteredWeekPayments.reduce((s, p) => s + parseFloat(p.amount_due || 0), 0)
   const weekCollectedFromDue = filteredWeekPayments.reduce((s, p) => s + parseFloat(p.amount_paid || 0), 0)
@@ -171,6 +178,10 @@ export default function WeeklyPayments() {
   const weekPaidBorrowers = groupByBorrowerAndLoan(thisWeekPaidCombined)
   const overdueBorrowers = groupByBorrowerAndLoan(filteredOverduePayments)
   const collectedBorrowers = groupByBorrowerAndLoan(filteredCollectedPayments)
+
+  // NEW: Separate groups for this week tab
+  const weekDueAndPaidBorrowers = groupByBorrowerAndLoan(thisWeekDueAndPaid)
+  const otherWeeksCollectedBorrowers = groupByBorrowerAndLoan(otherWeeksCollectedThisWeek)
 
   // Navigation
   const goToPreviousWeek = () => setWeekOffset(weekOffset - 1)
@@ -645,9 +656,9 @@ export default function WeeklyPayments() {
         >
           <AlertCircle className="w-4 h-4" />
           Pending
-          {filteredOverduePayments.length > 0 && (
+          {overdueBorrowers.length > 0 && (
             <span className="ml-0.5 px-1.5 py-0.5 text-xs rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-semibold">
-              {filteredOverduePayments.length}
+              {overdueBorrowers.length}
             </span>
           )}
         </button>
@@ -686,7 +697,7 @@ export default function WeeklyPayments() {
                 <div>
                   <h3 className="text-sm font-semibold text-yellow-700 dark:text-yellow-400 mb-3 flex items-center gap-2">
                     <Clock className="w-4 h-4" />
-                    Unpaid ({thisWeekPending.length})
+                    Unpaid ({weekPendingBorrowers.length})
                   </h3>
                   <div className="space-y-3">
                     {weekPendingBorrowers.map(b => renderBorrowerCard(b, 'week'))}
@@ -694,16 +705,41 @@ export default function WeeklyPayments() {
                 </div>
               )}
 
-              {/* Paid section */}
-              {weekPaidBorrowers.length > 0 && (
+              {/* Paid section - Due this week */}
+              {weekDueAndPaidBorrowers.length > 0 && (
                 <div>
                   <h3 className="text-sm font-semibold text-green-700 dark:text-green-400 mb-3 flex items-center gap-2">
                     <CheckCircle className="w-4 h-4" />
-                    Paid ({thisWeekPaidCombined.length})
+                    Paid - This Week ({weekDueAndPaidBorrowers.length})
                   </h3>
                   <div className="space-y-3 opacity-75">
-                    {weekPaidBorrowers.map(b => renderBorrowerCard(b, 'week'))}
+                    {weekDueAndPaidBorrowers.map(b => renderBorrowerCard(b, 'week'))}
                   </div>
+                </div>
+              )}
+
+              {/* Collapsible section - Other weeks collected this week */}
+              {otherWeeksCollectedBorrowers.length > 0 && (
+                <div>
+                  <button
+                    onClick={() => setShowOtherWeeksCollected(!showOtherWeeksCollected)}
+                    className="w-full flex items-center justify-between text-sm font-semibold text-blue-700 dark:text-blue-400 mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      <Banknote className="w-4 h-4" />
+                      <span>Other Weeks Collected This Week ({otherWeeksCollectedBorrowers.length})</span>
+                    </div>
+                    {showOtherWeeksCollected ? (
+                      <ChevronUp className="w-4 h-4" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4" />
+                    )}
+                  </button>
+                  {showOtherWeeksCollected && (
+                    <div className="space-y-3 opacity-75">
+                      {otherWeeksCollectedBorrowers.map(b => renderBorrowerCard(b, 'week'))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

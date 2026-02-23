@@ -179,7 +179,7 @@ export default function AddLoanModal({ isOpen, onClose, onSave, borrowers = [] }
     <div className="fixed inset-0 z-[60] flex items-end md:items-center justify-center p-0 md:p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white dark:bg-gray-800 rounded-t-3xl md:rounded-2xl shadow-2xl w-full md:max-w-2xl max-h-[92vh] md:max-h-[90vh] overflow-y-auto animate-slide-up md:animate-scale-in">
         {/* Header - larger tap target on mobile */}
-        <div className="sticky top-0 bg-gradient-to-r from-primary-600 to-accent-600 px-4 md:px-6 py-4 md:py-4 rounded-t-3xl md:rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-gradient-to-r from-primary-600 to-accent-600 px-4 md:px-6 py-4 pt-6 md:py-4 rounded-t-3xl md:rounded-t-2xl z-10">
           <div className="flex items-center justify-between min-h-[44px]">
             <h2 className="text-lg md:text-xl font-semibold text-white">Create New Loan</h2>
             <button

@@ -75,7 +75,7 @@ export default function AddBorrowerModal({ isOpen, onClose, onSave, editBorrower
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeSlideIn">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="sticky top-0 bg-gradient-to-r from-primary-600 to-accent-600 px-6 py-4 rounded-t-2xl">
+        <div className="sticky top-0 bg-gradient-to-r from-primary-600 to-accent-600 px-6 py-4 pt-6 rounded-t-2xl">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-semibold text-white">
               {editBorrower ? 'Edit Borrower' : 'Add New Borrower'}

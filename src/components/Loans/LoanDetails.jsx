@@ -268,7 +268,7 @@ export default function LoanDetails({ loanId, onClose, onUpdate }) {
       <div className="min-h-screen flex items-start md:items-center justify-center p-0 md:p-4">
         <div className="bg-white dark:bg-gray-800 w-full md:rounded-2xl md:shadow-2xl md:max-w-4xl min-h-screen md:min-h-0 md:my-8">
           {/* Header */}
-          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4 flex items-center justify-between md:rounded-t-2xl z-10">
+          <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4 pt-6 flex items-center justify-between md:rounded-t-2xl z-10">
             <div>
               <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
                 Loan Details

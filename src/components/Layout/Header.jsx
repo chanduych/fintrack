@@ -28,14 +28,16 @@ export default function Header({ currentView, onViewChange }) {
   ]
 
   return (
-    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40">
+    <header className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 sticky top-0 z-40 safe-top">
       <div className="max-w-7xl mx-auto px-4">
-        <div className="flex items-center justify-between h-16 md:h-16">
+        <div className="flex items-center justify-between h-16 md:h-16 pt-2">
           {/* Logo */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-accent-500 rounded-xl flex items-center justify-center">
-              <Wallet className="w-6 h-6 text-white" />
-            </div>
+            <img
+              src="/icon.svg"
+              alt="FinTrack Logo"
+              className="w-10 h-10 rounded-xl"
+            />
             <div className="hidden sm:block">
               <h1 className="text-xl font-bold text-gray-900 dark:text-white">
                 FinTrack

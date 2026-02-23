@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Calendar, Users, Wallet, Loader2, ChevronLeft, ChevronRight, Banknote } from 'lucide-react'
+import { Calendar, Users, Wallet, Loader2, ChevronLeft, ChevronRight, Banknote, ChevronDown, ChevronUp } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { getLoans } from '../../services/loanService'
 import { getPaymentsCollectedInRange } from '../../services/paymentService'
@@ -13,6 +13,7 @@ export default function WeeklyCollections() {
   const [loading, setLoading] = useState(true)
   const [weekOffset, setWeekOffset] = useState(0)
   const [showCalendar, setShowCalendar] = useState(false)
+  const [expandedLeaders, setExpandedLeaders] = useState(new Set())
 
   // Get week date range
   const getWeekRange = (offset = 0) => {
@@ -63,6 +64,17 @@ export default function WeeklyCollections() {
   const goToNextWeek = () => setWeekOffset(weekOffset + 1)
   const goToCurrentWeek = () => setWeekOffset(0)
 
+  // Toggle leader expansion
+  const toggleLeader = (leader) => {
+    const newExpanded = new Set(expandedLeaders)
+    if (newExpanded.has(leader)) {
+      newExpanded.delete(leader)
+    } else {
+      newExpanded.add(leader)
+    }
+    setExpandedLeaders(newExpanded)
+  }
+
   // Filter loans for selected week (by disbursement date)
   const weekLoans = loans.filter(loan => {
     if (!loan.start_date) return false
@@ -83,15 +95,23 @@ export default function WeeklyCollections() {
   const actualCollectedTotal = collectedPayments.reduce((sum, p) => sum + parseFloat(p.amount_paid || 0), 0)
   const collectedCount = collectedPayments.length
 
-  // Group collected by borrower
-  const collectedByBorrower = {}
+  // Group collected by leader
+  const collectedByLeader = {}
   for (const p of collectedPayments) {
-    const name = p.borrower_name || 'Unknown'
-    if (!collectedByBorrower[name]) {
-      collectedByBorrower[name] = { total: 0, count: 0, area: p.borrower_area }
+    const leader = p.borrower_leader_tag || 'No Leader'
+    if (!collectedByLeader[leader]) {
+      collectedByLeader[leader] = { total: 0, count: 0, borrowers: {} }
     }
-    collectedByBorrower[name].total += parseFloat(p.amount_paid || 0)
-    collectedByBorrower[name].count++
+    collectedByLeader[leader].total += parseFloat(p.amount_paid || 0)
+    collectedByLeader[leader].count++
+
+    // Also track individual borrowers within each leader
+    const borrowerName = p.borrower_name || 'Unknown'
+    if (!collectedByLeader[leader].borrowers[borrowerName]) {
+      collectedByLeader[leader].borrowers[borrowerName] = { total: 0, count: 0, area: p.borrower_area }
+    }
+    collectedByLeader[leader].borrowers[borrowerName].total += parseFloat(p.amount_paid || 0)
+    collectedByLeader[leader].borrowers[borrowerName].count++
   }
 
   if (loading) {
@@ -226,7 +246,7 @@ export default function WeeklyCollections() {
           </div>
         </div>
 
-        {/* Collected breakdown (who paid) */}
+        {/* Collected breakdown (grouped by leader) */}
         <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-4 mb-6 border border-green-200 dark:border-green-800">
           <div className="flex items-center justify-between mb-2">
             <p className="text-sm font-medium text-green-700 dark:text-green-400">Collected this week</p>
@@ -234,20 +254,54 @@ export default function WeeklyCollections() {
               {formatCurrency(actualCollectedTotal)}
             </p>
           </div>
-          {Object.keys(collectedByBorrower).length > 0 && (
-            <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800 space-y-1.5">
-              {Object.entries(collectedByBorrower)
+          {Object.keys(collectedByLeader).length > 0 && (
+            <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800 space-y-2">
+              {Object.entries(collectedByLeader)
                 .sort(([,a], [,b]) => b.total - a.total)
-                .map(([name, info]) => (
-                  <div key={name} className="flex items-center justify-between text-sm">
-                    <span className="text-green-800 dark:text-green-300">
-                      {name}
-                      {info.area && <span className="text-xs text-green-600 dark:text-green-500 ml-1">({info.area})</span>}
-                    </span>
-                    <span className="font-semibold text-green-700 dark:text-green-400 tabular-nums">
-                      {formatCurrency(info.total)}
-                      {info.count > 1 && <span className="text-xs font-normal ml-1">({info.count}x)</span>}
-                    </span>
+                .map(([leader, info]) => (
+                  <div key={leader} className="space-y-1">
+                    {/* Leader Header - Collapsible */}
+                    <button
+                      onClick={() => toggleLeader(leader)}
+                      className="w-full flex items-center justify-between text-sm py-2 px-3 bg-green-100 dark:bg-green-800/30 rounded-lg hover:bg-green-200 dark:hover:bg-green-800/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        {expandedLeaders.has(leader) ? (
+                          <ChevronUp className="w-4 h-4 text-green-700 dark:text-green-400" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4 text-green-700 dark:text-green-400" />
+                        )}
+                        <span className="font-semibold text-green-800 dark:text-green-300">
+                          {leader}
+                        </span>
+                        <span className="text-xs text-green-600 dark:text-green-500">
+                          ({Object.keys(info.borrowers).length} borrower{Object.keys(info.borrowers).length > 1 ? 's' : ''})
+                        </span>
+                      </div>
+                      <span className="font-bold text-green-700 dark:text-green-400 tabular-nums">
+                        {formatCurrency(info.total)}
+                      </span>
+                    </button>
+
+                    {/* Borrowers under this leader - Collapsible */}
+                    {expandedLeaders.has(leader) && (
+                      <div className="ml-8 space-y-1 mt-1">
+                        {Object.entries(info.borrowers)
+                          .sort(([,a], [,b]) => b.total - a.total)
+                          .map(([borrowerName, borrowerInfo]) => (
+                            <div key={borrowerName} className="flex items-center justify-between text-sm py-1">
+                              <span className="text-green-800 dark:text-green-300">
+                                {borrowerName}
+                                {borrowerInfo.area && <span className="text-xs text-green-600 dark:text-green-500 ml-1">({borrowerInfo.area})</span>}
+                              </span>
+                              <span className="font-semibold text-green-700 dark:text-green-400 tabular-nums">
+                                {formatCurrency(borrowerInfo.total)}
+                                {borrowerInfo.count > 1 && <span className="text-xs font-normal ml-1">({borrowerInfo.count}x)</span>}
+                              </span>
+                            </div>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 ))}
             </div>

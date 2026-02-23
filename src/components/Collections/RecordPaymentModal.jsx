@@ -136,7 +136,7 @@ export default function RecordPaymentModal({ payment, onClose, onSuccess }) {
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4 flex items-center justify-between md:rounded-t-2xl z-10">
+        <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 px-4 md:px-6 py-4 pt-6 flex items-center justify-between md:rounded-t-2xl z-10">
           <div>
             <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               {isEditing ? 'Edit Payment' : 'Record Payment'}
