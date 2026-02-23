@@ -36,6 +36,22 @@ export const getLoans = async (userId) => {
 }
 
 /**
+ * Get active loans (metadata only, no payments).
+ * Lightweight query for leader collection stats, etc.
+ */
+export const getActiveLoans = async (userId) => {
+  if (!supabase) return { data: null, error: 'Supabase not configured' }
+
+  const { data, error } = await supabase
+    .from('loan_summary')
+    .select('loan_id, user_id, borrower_id, borrower_name, borrower_leader_tag, loan_number, weekly_amount, status')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+
+  return { data, error }
+}
+
+/**
  * Get loans for a specific borrower
  */
 export const getLoansByBorrower = async (borrowerId) => {

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, IndianRupeeIcon, Calendar, CheckCircle, AlertTriangle, Trash2, ChevronDown, Loader2 } from 'lucide-react'
-import { recordPayment, resetPayment, getUnpaidPaymentsForLoan } from '../../services/paymentService'
+import { recordPayment, resetPayment, getPaymentsByLoan, getUnpaidPaymentsForLoan } from '../../services/paymentService'
 import { formatCurrency } from '../../utils/loanCalculations'
 import { formatDate } from '../../utils/dateUtils'
 
@@ -18,7 +18,8 @@ export default function RecordPaymentModal({ payment, onClose, onSuccess }) {
   const [error, setError] = useState('')
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
 
-  // Week/loan selector state
+  // Week/loan selector state: all payments for loan (for overall pending), unpaid only (for dropdown)
+  const [allPaymentsForLoan, setAllPaymentsForLoan] = useState([])
   const [unpaidWeeks, setUnpaidWeeks] = useState([])
   const [selectedPaymentId, setSelectedPaymentId] = useState(payment.id)
   const [selectedPaymentData, setSelectedPaymentData] = useState(payment)
@@ -26,21 +27,31 @@ export default function RecordPaymentModal({ payment, onClose, onSuccess }) {
   const [showWeekSelector, setShowWeekSelector] = useState(false)
 
   const isEditing = selectedPaymentData.amount_paid > 0
-  const remainingAmount = selectedPaymentData.amount_due - (selectedPaymentData.amount_paid || 0)
+  const dueAmount = parseFloat(selectedPaymentData.amount_due || 0)
+  const paidAmount = parseFloat(selectedPaymentData.amount_paid || 0)
+  const remainingAmount = dueAmount - paidAmount
+  const extraPaid = paidAmount > dueAmount ? paidAmount - dueAmount : 0
+  const isPartial = paidAmount > 0 && paidAmount < dueAmount
+  // Overall pending = total balance (all amount_due) minus all amount_paid on this loan
+  const totalBalance = allPaymentsForLoan.reduce((s, p) => s + parseFloat(p.amount_due || 0), 0)
+  const totalPaidSoFar = allPaymentsForLoan.reduce((s, p) => s + parseFloat(p.amount_paid || 0), 0)
+  const overallPending = totalBalance - totalPaidSoFar
 
-  // Load unpaid weeks for this specific loan on mount
+  // Load all payments for loan (for overall pending) and unpaid weeks (for dropdown)
   useEffect(() => {
     if (payment.loan_id) {
-      loadUnpaidWeeks()
+      loadLoanPayments()
     }
-  }, [payment.loan_id])
+  }, [payment.loan_id, payment.id])
 
-  const loadUnpaidWeeks = async () => {
+  const loadLoanPayments = async () => {
     setLoadingWeeks(true)
-    const result = await getUnpaidPaymentsForLoan(payment.loan_id)
-    if (!result.error && result.data) {
-      setUnpaidWeeks(result.data)
-    }
+    const [allRes, unpaidRes] = await Promise.all([
+      getPaymentsByLoan(payment.loan_id),
+      getUnpaidPaymentsForLoan(payment.loan_id)
+    ])
+    if (!allRes.error && allRes.data) setAllPaymentsForLoan(allRes.data)
+    if (!unpaidRes.error && unpaidRes.data) setUnpaidWeeks(unpaidRes.data)
     setLoadingWeeks(false)
   }
 
@@ -57,9 +68,11 @@ export default function RecordPaymentModal({ payment, onClose, onSuccess }) {
       status: week.status,
       loan_number: week.loan_number
     })
-    // Pre-fill amount with the weekly due
+    const due = parseFloat(week.amount_due || 0)
+    const paid = parseFloat(week.amount_paid || 0)
+    const remaining = due - paid
     if (!amount || parseFloat(amount) === parseFloat(payment.amount_due)) {
-      setAmount(week.amount_due.toFixed(2))
+      setAmount(remaining > 0 ? remaining.toFixed(2) : due.toFixed(2))
     }
     setShowWeekSelector(false)
   }
@@ -245,26 +258,37 @@ export default function RecordPaymentModal({ payment, onClose, onSuccess }) {
             )}
           </div>
 
-          {/* Payment Info */}
+          {/* Payment Info: This week EMI → This week paid → This week extra OR pending → Overall pending */}
           <div className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4 space-y-2">
             <div className="flex justify-between">
-              <span className="text-sm text-gray-600 dark:text-gray-400">{currentLabel} Due</span>
+              <span className="text-sm text-gray-600 dark:text-gray-400">This week EMI</span>
               <span className="text-sm font-semibold text-gray-900 dark:text-white tabular-nums">
-                {formatCurrency(selectedPaymentData.amount_due)}
+                {formatCurrency(dueAmount)}
               </span>
             </div>
-            {selectedPaymentData.amount_paid > 0 && (
+            <div className="flex justify-between">
+              <span className="text-sm text-gray-600 dark:text-gray-400">This week paid</span>
+              <span className="text-sm font-semibold text-green-600 dark:text-green-400 tabular-nums">
+                {formatCurrency(paidAmount)}
+              </span>
+            </div>
+            {extraPaid > 0 ? (
               <div className="flex justify-between">
-                <span className="text-sm text-gray-600 dark:text-gray-400">Already Paid</span>
-                <span className="text-sm font-semibold text-green-600 dark:text-green-400 tabular-nums">
-                  {formatCurrency(selectedPaymentData.amount_paid)}
+                <span className="text-sm text-gray-600 dark:text-gray-400">This week extra</span>
+                <span className="text-sm font-semibold text-green-600 dark:text-green-400 tabular-nums">+{formatCurrency(extraPaid)}</span>
+              </div>
+            ) : remainingAmount > 0 ? (
+              <div className="flex justify-between">
+                <span className="text-sm text-gray-600 dark:text-gray-400">This week pending</span>
+                <span className="text-sm font-semibold text-yellow-600 dark:text-yellow-400 tabular-nums">
+                  {formatCurrency(remainingAmount)}
                 </span>
               </div>
-            )}
+            ) : null}
             <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-gray-600">
-              <span className="text-sm font-medium text-gray-900 dark:text-white">Remaining Balance</span>
-              <span className="text-lg font-bold text-yellow-600 dark:text-yellow-400 tabular-nums">
-                {formatCurrency(remainingAmount)}
+              <span className="text-sm text-gray-600 dark:text-gray-400">Overall pending (this loan)</span>
+              <span className="text-sm font-semibold text-amber-600 dark:text-amber-400 tabular-nums">
+                {formatCurrency(overallPending)}
               </span>
             </div>
           </div>

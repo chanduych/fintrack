@@ -144,6 +144,19 @@ export default function WeeklyPayments() {
     .filter(p => p.due_date > weekEndStr)
     .reduce((s, p) => s + parseFloat(p.amount_paid || 0), 0)
 
+  // Collected breakdown: EMI (full), extra paid, partial paid
+  const collectedAsEmi = filteredCollectedPayments.reduce(
+    (s, p) => s + Math.min(parseFloat(p.amount_paid || 0), parseFloat(p.amount_due || 0)),
+    0
+  )
+  const collectedAsExtra = filteredCollectedPayments.reduce(
+    (s, p) => s + Math.max(0, parseFloat(p.amount_paid || 0) - parseFloat(p.amount_due || 0)),
+    0
+  )
+  const collectedAsPartial = filteredCollectedPayments
+    .filter(p => parseFloat(p.amount_paid || 0) > 0 && parseFloat(p.amount_paid || 0) < parseFloat(p.amount_due || 0))
+    .reduce((s, p) => s + parseFloat(p.amount_paid || 0), 0)
+
   // Group by borrower + loan so each loan is a separate card
   const groupByBorrowerAndLoan = (payments) => {
     const grouped = {}
@@ -272,6 +285,9 @@ export default function WeeklyPayments() {
     const isCollectedSection = sectionType === 'collected'
     const pendingKey = `${group.borrower_id}-${group.loan_id}`
     const isPendingExpanded = isPendingSection && expandedPendingLoanKeys.has(pendingKey)
+    const loanOverallPending = group.payments
+      .filter(p => p.status !== 'paid')
+      .reduce((s, p) => s + (parseFloat(p.amount_due || 0) - parseFloat(p.amount_paid || 0)), 0)
 
     return (
       <div
@@ -330,8 +346,13 @@ export default function WeeklyPayments() {
                   {isCollectedSection
                     ? formatCurrency(group.payments.reduce((s, p) => s + parseFloat(p.amount_paid || 0), 0))
                     : formatCurrency(group.payments.reduce((s, p) => s + parseFloat(p.amount_due || 0), 0))
-                }
+                  }
                 </p>
+                {loanOverallPending > 0 && !isCollectedSection && (
+                  <p className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold tabular-nums">
+                    Overall pending: {formatCurrency(loanOverallPending)}
+                  </p>
+                )}
                 <p className="text-[10px] text-gray-400 whitespace-nowrap">
                   {isPendingSection
                     ? `${group.payments.length} week${group.payments.length !== 1 ? 's' : ''}`
@@ -344,19 +365,6 @@ export default function WeeklyPayments() {
                 </span>
               )}
             </div>
-            {/* Foreclose button - only for active loans (not closed/foreclosed) */}
-            {!isCollectedSection && group.loan_status === 'active' && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleForecloseLoan(group)
-                }}
-                className="ml-2 px-3 py-1.5 text-xs font-medium bg-red-50 dark:bg-red-900/20 hover:bg-red-100 dark:hover:bg-red-900/30 text-red-600 dark:text-red-400 rounded-lg transition-colors"
-                title="Foreclose Loan"
-              >
-                Foreclose
-              </button>
-            )}
           </div>
         </div>
 
@@ -406,20 +414,30 @@ export default function WeeklyPayments() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   {isCollectedSection ? (
-                    <p className="text-sm font-bold text-green-600 dark:text-green-400 tabular-nums">
-                      {formatCurrency(payment.amount_paid)}
-                    </p>
-                  ) : (
-                    <>
-                      <p className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">
-                        {formatCurrency(payment.amount_due)}
-                      </p>
-                      {payment.amount_paid > 0 && payment.status !== 'paid' && (
-                        <p className="text-xs text-green-600 dark:text-green-400 tabular-nums">
-                          Paid: {formatCurrency(payment.amount_paid)}
-                        </p>
+                    <div className="text-sm space-y-0.5">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">Total: <span className="text-sm font-bold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">EMI: <span className="font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{formatCurrency(payment.amount_due)}</span></p>
+                      {parseFloat(payment.amount_paid || 0) > parseFloat(payment.amount_due || 0) && (
+                        <p className="text-[10px] text-green-600 dark:text-green-400">Extra: <span className="font-semibold tabular-nums">+{formatCurrency(parseFloat(payment.amount_paid) - parseFloat(payment.amount_due))}</span></p>
                       )}
-                    </>
+                      {parseFloat(payment.amount_paid || 0) > 0 && parseFloat(payment.amount_paid || 0) < parseFloat(payment.amount_due || 0) && (
+                        <p className="text-[10px] text-blue-600 dark:text-blue-400">Partial: <span className="font-semibold tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-sm space-y-0.5">
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">Total: <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{formatCurrency(payment.amount_paid || 0)}</span></p>
+                      <p className="text-[10px] text-gray-500 dark:text-gray-400">EMI: <span className="font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{formatCurrency(payment.amount_due)}</span></p>
+                      {payment.status !== 'paid' && parseFloat(payment.amount_due || 0) - parseFloat(payment.amount_paid || 0) > 0 && (
+                        <p className="text-[10px] text-yellow-600 dark:text-yellow-400">Pending: <span className="font-semibold tabular-nums">{formatCurrency(parseFloat(payment.amount_due || 0) - parseFloat(payment.amount_paid || 0))}</span></p>
+                      )}
+                      {parseFloat(payment.amount_paid || 0) > 0 && parseFloat(payment.amount_paid || 0) < parseFloat(payment.amount_due || 0) && (
+                        <p className="text-[10px] text-blue-600 dark:text-blue-400">Partial: <span className="font-semibold tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
+                      )}
+                      {payment.status === 'paid' && parseFloat(payment.amount_paid || 0) > parseFloat(payment.amount_due || 0) && (
+                        <p className="text-[10px] text-green-600 dark:text-green-400">Extra: <span className="font-semibold tabular-nums">+{formatCurrency(parseFloat(payment.amount_paid) - parseFloat(payment.amount_due))}</span></p>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex-shrink-0">
@@ -454,6 +472,21 @@ export default function WeeklyPayments() {
             )
           })}
         </div>
+        )}
+        {/* Foreclose - at bottom of card, subtle, so it's not tempting */}
+        {!isCollectedSection && group.loan_status === 'active' && (
+          <div className="px-4 py-2 border-t border-gray-100 dark:border-gray-700 flex justify-end">
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                handleForecloseLoan(group)
+              }}
+              className="text-[10px] font-medium text-rose-400 dark:text-rose-500 hover:text-rose-600 dark:hover:text-rose-400 transition-colors"
+              title="Foreclose loan (close all pending weeks)"
+            >
+              Foreclose loan
+            </button>
+          </div>
         )}
       </div>
     )
@@ -624,6 +657,36 @@ export default function WeeklyPayments() {
                 <span className="text-xs text-amber-600 dark:text-amber-400">Foreclosed (future weeks):</span>
                 <span className="text-sm font-bold text-amber-600 dark:text-amber-400 tabular-nums">{formatCurrency(collectedFromForeclosed)}</span>
               </div>
+            </div>
+          </div>
+        )}
+        {/* Collected breakdown: Total paid first, then EMI, then extra or partial */}
+        {actualCollectedTotal > 0 && (
+          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+            <div className="flex items-baseline gap-2 mb-2">
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total paid this week</span>
+              <span className="text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(actualCollectedTotal)}</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm pt-1 border-t border-gray-200 dark:border-gray-600">
+              <span className="text-gray-600 dark:text-gray-400">EMI:</span>
+              <span className="font-semibold text-gray-900 dark:text-white tabular-nums">{formatCurrency(collectedAsEmi)}</span>
+              {(collectedAsExtra > 0 || collectedAsPartial > 0) && (
+                <>
+                  <span className="text-gray-400 dark:text-gray-500">·</span>
+                  {collectedAsExtra > 0 && (
+                    <>
+                      <span className="text-green-600 dark:text-green-400">Extra:</span>
+                      <span className="font-semibold text-green-600 dark:text-green-400 tabular-nums">+{formatCurrency(collectedAsExtra)}</span>
+                    </>
+                  )}
+                  {collectedAsPartial > 0 && (
+                    <>
+                      <span className="text-blue-600 dark:text-blue-400">Partial:</span>
+                      <span className="font-semibold text-blue-600 dark:text-blue-400 tabular-nums">{formatCurrency(collectedAsPartial)}</span>
+                    </>
+                  )}
+                </>
+              )}
             </div>
           </div>
         )}

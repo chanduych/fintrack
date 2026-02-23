@@ -41,9 +41,7 @@ export default function AddBorrowerModal({ isOpen, onClose, onSave, editBorrower
       newErrors.area = 'Area is required'
     }
 
-    if (!formData.phone.trim()) {
-      newErrors.phone = 'Phone number is required'
-    } else if (!/^\d{10}$/.test(formData.phone.replace(/\s/g, ''))) {
+    if (formData.phone.trim() && !/^\d{10}$/.test(formData.phone.replace(/\s/g, ''))) {
       newErrors.phone = 'Phone number must be 10 digits'
     }
 
@@ -143,7 +141,7 @@ export default function AddBorrowerModal({ isOpen, onClose, onSave, editBorrower
           {/* Phone */}
           <div>
             <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Phone Number <span className="text-red-500">*</span>
+              Phone Number
             </label>
             <div className="relative">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
