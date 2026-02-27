@@ -4,6 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { getLoans, createLoan } from '../../services/loanService'
 import { getBorrowers } from '../../services/borrowerService'
 import { getSettings } from '../../services/settingsService'
+import { getWeekRangeForCollectionDay } from '../../utils/dateUtils'
 import { useToast } from '../../hooks/useToast'
 import { ToastContainer } from '../Common/Toast'
 import LoanCard from './LoanCard'
@@ -30,12 +31,14 @@ const LoansList = forwardRef((props, ref) => {
   const [statusFilter, setStatusFilter] = useState('active') // 'all', 'active', 'closed', 'foreclosed' - default to active
   const [areaFilter, setAreaFilter] = useState('all')
   const [leaderFilter, setLeaderFilter] = useState('all')
+  const [collectionDay, setCollectionDay] = useState(0)
 
   useEffect(() => {
     if (user) {
       loadData()
       getSettings(user.id).then(({ data }) => {
         setAllowMassRecordPast(data?.allow_mass_record_past === true)
+        if (data?.default_collection_day != null) setCollectionDay(data.default_collection_day)
       })
     }
   }, [user])
@@ -115,15 +118,12 @@ const LoansList = forwardRef((props, ref) => {
   // Stats
   const activeLoans = loans.filter(l => l.status === 'active').length
 
-  // This week's loans (based on start_date)
-  const today = new Date()
-  const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay()) // Sunday
-  const weekEnd = new Date(weekStart)
-  weekEnd.setDate(weekEnd.getDate() + 7)
-
+  // This week's loans (based on start_date; week = collection day from Settings, e.g. Mon–Sun)
+  const { start: weekStart, end: weekEnd } = getWeekRangeForCollectionDay(collectionDay, 0)
   const thisWeekLoans = loans.filter(l => {
     const loanDate = new Date(l.start_date)
-    return loanDate >= weekStart && loanDate < weekEnd
+    loanDate.setHours(0, 0, 0, 0)
+    return loanDate >= weekStart && loanDate <= weekEnd
   })
 
   if (loading) {

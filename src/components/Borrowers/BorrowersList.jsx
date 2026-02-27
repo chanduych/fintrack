@@ -4,7 +4,9 @@ import { useAuth } from '../../contexts/AuthContext'
 import { getBorrowers, createBorrower, updateBorrower, deleteBorrower } from '../../services/borrowerService'
 import { getActiveLoans } from '../../services/loanService'
 import { getPaymentsByWeek, getOverduePayments_all } from '../../services/paymentService'
+import { getUserSettings } from '../../services/userService'
 import { formatCurrency } from '../../utils/loanCalculations'
+import { getWeekRangeForCollectionDay } from '../../utils/dateUtils'
 import { useToast } from '../../hooks/useToast'
 import { ToastContainer } from '../Common/Toast'
 import BorrowerCard from './BorrowerCard'
@@ -29,19 +31,21 @@ const BorrowersList = forwardRef((props, ref) => {
   const [expandedLeader, setExpandedLeader] = useState(null)
   const [showOverdue, setShowOverdue] = useState(false) // toggle to show overdue at group and per-loan
   const [loading, setLoading] = useState(true)
+  const [collectionDay, setCollectionDay] = useState(0)
   const [searchTerm, setSearchTerm] = useState('')
   const [sortBy, setSortBy] = useState('recent') // 'recent', 'name', 'area', 'leader'
   const [areaFilter, setAreaFilter] = useState('all')
   const [leaderFilter, setLeaderFilter] = useState('all')
 
-  // This week range (Sunday–Saturday, same as WeeklyPayments)
-  const getWeekRange = () => {
-    const today = new Date()
-    const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay())
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
-    return { start: weekStart, end: weekEnd }
-  }
+  const getWeekRange = () => getWeekRangeForCollectionDay(collectionDay, 0)
+
+  useEffect(() => {
+    if (user) {
+      getUserSettings(user.id).then(({ data }) => {
+        if (data?.default_collection_day != null) setCollectionDay(data.default_collection_day)
+      })
+    }
+  }, [user])
 
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingBorrower, setEditingBorrower] = useState(null)
@@ -55,7 +59,7 @@ const BorrowersList = forwardRef((props, ref) => {
       loadBorrowers()
       loadLeaderWeekData()
     }
-  }, [user])
+  }, [user, collectionDay])
 
   const loadLeaderWeekData = async () => {
     if (!user) return

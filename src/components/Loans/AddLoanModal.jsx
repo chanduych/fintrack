@@ -35,37 +35,44 @@ export default function AddLoanModal({ isOpen, onClose, onSave, borrowers = [] }
     const { data, error } = await getUserSettings(user.id)
 
     if (!error && data) {
+      const defaultCollectionDay = data.default_collection_day ?? 0
       setWeeklyRate(data.weekly_rate || 0.05)
-      setFormData(prev => ({
-        ...prev,
-        number_of_weeks: data.default_weeks || 24,
-        collection_day: data.default_collection_day || 0
-      }))
+      setFormData(prev => {
+        const start = prev.start_date || formatDateISO(new Date())
+        return {
+          ...prev,
+          number_of_weeks: data.default_weeks || 24,
+          collection_day: defaultCollectionDay,
+          first_payment_date: getNextCollectionDay(start, defaultCollectionDay)
+        }
+      })
     }
     setLoadingSettings(false)
   }
 
-  // Next Sunday from a date (for first installment default)
-  const getNextSunday = (dateStr) => {
-    if (!dateStr) return ''
+  // Next occurrence of the given weekday (0=Sun, 1=Mon, ... 6=Sat) on or after dateStr
+  const getNextCollectionDay = (dateStr, collectionDay) => {
+    if (!dateStr || collectionDay == null) return ''
     const d = new Date(dateStr)
+    d.setHours(0, 0, 0, 0)
     const day = d.getDay()
-    const daysToAdd = day === 0 ? 7 : (7 - day)
-    d.setDate(d.getDate() + daysToAdd)
+    let daysToAdd = 0
+    if (day < collectionDay) daysToAdd = collectionDay - day
+    else if (day > collectionDay) daysToAdd = 7 - day + collectionDay
+    if (daysToAdd > 0) d.setDate(d.getDate() + daysToAdd)
     return formatDateISO(d)
   }
 
-  // Reset form when modal opens
+  // Reset form when modal opens (initial state; first_payment_date and collection_day updated when settings load)
   useEffect(() => {
     if (isOpen) {
       const today = formatDateISO(new Date())
-      const nextSun = getNextSunday(today)
       setFormData({
         borrower_id: '',
         principal_amount: '',
         number_of_weeks: 24,
         start_date: today,
-        first_payment_date: nextSun,
+        first_payment_date: '',
         collection_day: 0
       })
       setErrors({})
@@ -100,7 +107,7 @@ export default function AddLoanModal({ isOpen, onClose, onSave, borrowers = [] }
     ? calculateInterest(totalAmount, parseFloat(formData.principal_amount))
     : 0
 
-  const firstPaymentDateStr = formData.first_payment_date || getNextSunday(formData.start_date)
+  const firstPaymentDateStr = formData.first_payment_date || getNextCollectionDay(formData.start_date, formData.collection_day)
   const firstPaymentDate = firstPaymentDateStr ? new Date(firstPaymentDateStr) : null
 
   const selectedBorrower = borrowers.find(b => b.id === formData.borrower_id)
@@ -164,7 +171,10 @@ export default function AddLoanModal({ isOpen, onClose, onSave, borrowers = [] }
     setFormData(prev => {
       const next = { ...prev, [field]: value }
       if (field === 'start_date' && value) {
-        next.first_payment_date = getNextSunday(value)
+        next.first_payment_date = getNextCollectionDay(value, next.collection_day)
+      }
+      if (field === 'collection_day' && value !== undefined) {
+        next.first_payment_date = getNextCollectionDay(next.start_date, parseInt(value, 10))
       }
       return next
     })
@@ -352,13 +362,13 @@ export default function AddLoanModal({ isOpen, onClose, onSave, borrowers = [] }
               )}
             </div>
 
-            {/* First installment date (editable; default = next Sunday) */}
+            {/* First installment date (editable; default = next occurrence of collection day from settings) */}
             <div>
               <label htmlFor="first_payment_date" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                 First installment date
               </label>
               <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Default is next Sunday from disbursement. You can change it.
+                Default is the next {getDayName(formData.collection_day)} from disbursement (from Settings). You can change it.
               </p>
               <div className="relative">
                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5 pointer-events-none" />

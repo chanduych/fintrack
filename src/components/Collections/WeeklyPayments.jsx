@@ -7,8 +7,9 @@ import {
 import { useAuth } from '../../contexts/AuthContext'
 import { getPaymentsByWeek, getOverduePayments_all, getPaymentsCollectedInRange } from '../../services/paymentService'
 import { forecloseLoan } from '../../services/loanService'
+import { getUserSettings } from '../../services/userService'
 import { formatCurrency } from '../../utils/loanCalculations'
-import { formatDate } from '../../utils/dateUtils'
+import { formatDate, getWeekRangeForCollectionDay } from '../../utils/dateUtils'
 import RecordPaymentModal from './RecordPaymentModal'
 
 export default function WeeklyPayments() {
@@ -33,21 +34,24 @@ export default function WeeklyPayments() {
   const [foreclosureLoading, setForeclosureLoading] = useState(false)
   const [foreclosureError, setForeclosureError] = useState('')
   const [showOtherWeeksCollected, setShowOtherWeeksCollected] = useState(false)
+  const [showStatsBreakdown, setShowStatsBreakdown] = useState(false)
+  const [collectionDay, setCollectionDay] = useState(0) // 0=Sun, 1=Mon, ... from Settings
 
-  // Get week date range
-  const getWeekRange = (offset = 0) => {
-    const today = new Date()
-    const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay() + (offset * 7))
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
-    return { start: weekStart, end: weekEnd }
-  }
-
+  // Week range from Settings default collection day (e.g. Monday–Sunday if Monday selected)
+  const getWeekRange = (offset = 0) => getWeekRangeForCollectionDay(collectionDay, offset)
   const weekRange = getWeekRange(weekOffset)
 
   useEffect(() => {
+    if (user) {
+      getUserSettings(user.id).then(({ data }) => {
+        if (data?.default_collection_day != null) setCollectionDay(data.default_collection_day)
+      })
+    }
+  }, [user])
+
+  useEffect(() => {
     if (user) loadData()
-  }, [user, weekOffset])
+  }, [user, weekOffset, collectionDay])
 
   const loadData = async () => {
     setLoading(true)
@@ -202,11 +206,13 @@ export default function WeeklyPayments() {
   const goToCurrentWeek = () => setWeekOffset(0)
 
   const handleDateSelect = (date) => {
-    const selectedDate = new Date(date)
-    const today = new Date()
-    const todayWeekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay())
-    const selectedWeekStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - selectedDate.getDay())
-    const diffWeeks = Math.round((selectedWeekStart - todayWeekStart) / (7 * 24 * 60 * 60 * 1000))
+    const selected = new Date(date)
+    selected.setHours(0, 0, 0, 0)
+    const daysBack = (selected.getDay() - collectionDay + 7) % 7
+    const selectedWeekStart = new Date(selected)
+    selectedWeekStart.setDate(selected.getDate() - daysBack)
+    const { start: currentStart } = getWeekRangeForCollectionDay(collectionDay, 0)
+    const diffWeeks = Math.round((selectedWeekStart - currentStart) / (7 * 24 * 60 * 60 * 1000))
     setWeekOffset(diffWeeks)
     setShowCalendar(false)
   }
@@ -336,7 +342,7 @@ export default function WeeklyPayments() {
               </div>
             </div>
             {/* Loan total for this section */}
-            <div className="flex items-center justify-between sm:justify-end gap-2 pl-13 sm:pl-0">
+            <div className="flex items-center justify-between sm:justify-end gap-2 mt-2 sm:mt-0">
               <div className="text-left sm:text-right whitespace-nowrap">
                 <p className={`text-sm font-bold tabular-nums ${
                   isCollectedSection ? 'text-green-600 dark:text-green-400'
@@ -381,7 +387,7 @@ export default function WeeklyPayments() {
             const displayStatus = isOverdue && payment.status !== 'paid' ? 'overdue' : payment.status
 
             return (
-              <div key={payment.id} className={`px-4 py-3 flex items-center justify-between gap-3 ${isOverdue && payment.status !== 'paid' ? 'bg-red-50/50 dark:bg-red-900/5' : ''}`}>
+              <div key={payment.id} className={`px-4 py-3 flex flex-wrap sm:flex-nowrap items-start sm:items-center justify-between gap-2 sm:gap-3 ${isOverdue && payment.status !== 'paid' ? 'bg-red-50/50 dark:bg-red-900/5' : ''}`}>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     {payment.display_loan_number && (
@@ -412,61 +418,63 @@ export default function WeeklyPayments() {
                     )}
                   </div>
                 </div>
-                <div className="text-right flex-shrink-0">
-                  {isCollectedSection ? (
-                    <div className="text-sm space-y-0.5">
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">Total: <span className="text-sm font-bold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">EMI: <span className="font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{formatCurrency(payment.amount_due)}</span></p>
-                      {parseFloat(payment.amount_paid || 0) > parseFloat(payment.amount_due || 0) && (
-                        <p className="text-[10px] text-green-600 dark:text-green-400">Extra: <span className="font-semibold tabular-nums">+{formatCurrency(parseFloat(payment.amount_paid) - parseFloat(payment.amount_due))}</span></p>
-                      )}
-                      {parseFloat(payment.amount_paid || 0) > 0 && parseFloat(payment.amount_paid || 0) < parseFloat(payment.amount_due || 0) && (
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400">Partial: <span className="font-semibold tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-sm space-y-0.5">
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">Total: <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{formatCurrency(payment.amount_paid || 0)}</span></p>
-                      <p className="text-[10px] text-gray-500 dark:text-gray-400">EMI: <span className="font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{formatCurrency(payment.amount_due)}</span></p>
-                      {payment.status !== 'paid' && parseFloat(payment.amount_due || 0) - parseFloat(payment.amount_paid || 0) > 0 && (
-                        <p className="text-[10px] text-yellow-600 dark:text-yellow-400">Pending: <span className="font-semibold tabular-nums">{formatCurrency(parseFloat(payment.amount_due || 0) - parseFloat(payment.amount_paid || 0))}</span></p>
-                      )}
-                      {parseFloat(payment.amount_paid || 0) > 0 && parseFloat(payment.amount_paid || 0) < parseFloat(payment.amount_due || 0) && (
-                        <p className="text-[10px] text-blue-600 dark:text-blue-400">Partial: <span className="font-semibold tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
-                      )}
-                      {payment.status === 'paid' && parseFloat(payment.amount_paid || 0) > parseFloat(payment.amount_due || 0) && (
-                        <p className="text-[10px] text-green-600 dark:text-green-400">Extra: <span className="font-semibold tabular-nums">+{formatCurrency(parseFloat(payment.amount_paid) - parseFloat(payment.amount_due))}</span></p>
-                      )}
-                    </div>
-                  )}
-                </div>
-                <div className="flex-shrink-0">
-                  {isCollectedSection ? (
-                    <button
-                      onClick={() => handleRecordPayment(payment)}
-                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      Edit
-                    </button>
-                  ) : payment.status === 'paid' ? (
-                    <button
-                      onClick={() => handleRecordPayment(payment)}
-                      className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                    >
-                      Edit
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleRecordPayment(payment)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-lg text-white transition-colors ${
-                        isOverdue
-                          ? 'bg-red-600 hover:bg-red-700'
-                          : 'bg-primary-600 hover:bg-primary-700'
-                      }`}
-                    >
-                      Pay
-                    </button>
-                  )}
+                <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+                  <div className="text-right flex-shrink-0">
+                    {isCollectedSection ? (
+                      <div className="text-sm flex sm:block items-center gap-2 sm:space-y-0.5">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400">Total: <span className="text-sm font-bold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block">EMI: <span className="font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{formatCurrency(payment.amount_due)}</span></p>
+                        {parseFloat(payment.amount_paid || 0) > parseFloat(payment.amount_due || 0) && (
+                          <p className="text-[10px] text-green-600 dark:text-green-400">Extra: <span className="font-semibold tabular-nums">+{formatCurrency(parseFloat(payment.amount_paid) - parseFloat(payment.amount_due))}</span></p>
+                        )}
+                        {parseFloat(payment.amount_paid || 0) > 0 && parseFloat(payment.amount_paid || 0) < parseFloat(payment.amount_due || 0) && (
+                          <p className="text-[10px] text-blue-600 dark:text-blue-400">Partial: <span className="font-semibold tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-sm flex sm:block items-center gap-2 sm:space-y-0.5">
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400">Total: <span className="text-sm font-bold text-gray-900 dark:text-white tabular-nums">{formatCurrency(payment.amount_paid || 0)}</span></p>
+                        <p className="text-[10px] text-gray-500 dark:text-gray-400 hidden sm:block">EMI: <span className="font-semibold text-gray-700 dark:text-gray-300 tabular-nums">{formatCurrency(payment.amount_due)}</span></p>
+                        {payment.status !== 'paid' && parseFloat(payment.amount_due || 0) - parseFloat(payment.amount_paid || 0) > 0 && (
+                          <p className="text-[10px] text-yellow-600 dark:text-yellow-400">Pending: <span className="font-semibold tabular-nums">{formatCurrency(parseFloat(payment.amount_due || 0) - parseFloat(payment.amount_paid || 0))}</span></p>
+                        )}
+                        {parseFloat(payment.amount_paid || 0) > 0 && parseFloat(payment.amount_paid || 0) < parseFloat(payment.amount_due || 0) && (
+                          <p className="text-[10px] text-blue-600 dark:text-blue-400">Partial: <span className="font-semibold tabular-nums">{formatCurrency(payment.amount_paid)}</span></p>
+                        )}
+                        {payment.status === 'paid' && parseFloat(payment.amount_paid || 0) > parseFloat(payment.amount_due || 0) && (
+                          <p className="text-[10px] text-green-600 dark:text-green-400">Extra: <span className="font-semibold tabular-nums">+{formatCurrency(parseFloat(payment.amount_paid) - parseFloat(payment.amount_due))}</span></p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-shrink-0 ml-auto sm:ml-0">
+                    {isCollectedSection ? (
+                      <button
+                        onClick={() => handleRecordPayment(payment)}
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Edit
+                      </button>
+                    ) : payment.status === 'paid' ? (
+                      <button
+                        onClick={() => handleRecordPayment(payment)}
+                        className="px-3 py-1.5 text-xs font-medium rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                      >
+                        Edit
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleRecordPayment(payment)}
+                        className={`px-3 py-1.5 text-xs font-medium rounded-lg text-white transition-colors ${
+                          isOverdue
+                            ? 'bg-red-600 hover:bg-red-700'
+                            : 'bg-primary-600 hover:bg-primary-700'
+                        }`}
+                      >
+                        Pay
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             )
@@ -506,13 +514,13 @@ export default function WeeklyPayments() {
       </div>
 
       {/* Week Selector */}
-      <div className="flex items-center gap-2 mb-4">
-        <button onClick={goToPreviousWeek} className="p-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+      <div className="flex items-center gap-2 mb-4 overflow-x-auto">
+        <button onClick={goToPreviousWeek} className="flex-shrink-0 p-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
           <ChevronLeft className="w-4 h-4 text-gray-600 dark:text-gray-300" />
         </button>
         <button
           onClick={goToCurrentWeek}
-          className={`px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+          className={`flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
             weekOffset === 0 ? 'bg-primary-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
           }`}
         >
@@ -520,12 +528,12 @@ export default function WeeklyPayments() {
         </button>
         <button
           onClick={() => setShowCalendar(!showCalendar)}
-          className="px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
+          className="flex-shrink-0 px-3 py-2 rounded-lg text-sm font-medium bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors flex items-center gap-1"
         >
           <Calendar className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">Pick Date</span>
         </button>
-        <button onClick={goToNextWeek} className="p-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+        <button onClick={goToNextWeek} className="flex-shrink-0 p-2 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
           <ChevronRight className="w-4 h-4 text-gray-600 dark:text-gray-300" />
         </button>
       </div>
@@ -556,8 +564,8 @@ export default function WeeklyPayments() {
       {/* Filters */}
       {(areas.length > 0 || leaders.length > 0) && (
         <div className="flex flex-wrap items-center gap-2 mb-4">
-          <Filter className="w-4 h-4 text-gray-400 flex-shrink-0" />
-          <div className="relative flex-1 min-w-[150px] max-w-[250px]">
+          <Filter className="w-4 h-4 text-gray-400 flex-shrink-0 hidden sm:block" />
+          <div className="relative w-full sm:w-auto sm:flex-1 sm:min-w-[150px] sm:max-w-[250px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input
               type="text"
@@ -571,7 +579,7 @@ export default function WeeklyPayments() {
             <select
               value={filterArea}
               onChange={(e) => setFilterArea(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+              className="flex-1 sm:flex-none px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
             >
               <option value="">All Areas</option>
               {areas.map(a => <option key={a} value={a}>{a}</option>)}
@@ -581,7 +589,7 @@ export default function WeeklyPayments() {
             <select
               value={filterLeader}
               onChange={(e) => setFilterLeader(e.target.value)}
-              className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
+              className="flex-1 sm:flex-none px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-primary-500"
             >
               <option value="">All Leaders</option>
               {leaders.map(l => <option key={l} value={l}>{l}</option>)}
@@ -603,46 +611,71 @@ export default function WeeklyPayments() {
         <h2 className="text-sm font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">
           This Week&apos;s Overview
         </h2>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
           <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-3 border border-blue-200 dark:border-blue-800">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-              <p className="text-[10px] font-semibold text-blue-700 dark:text-blue-400 uppercase">Due</p>
+            <div className="flex items-center justify-between sm:block">
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Calendar className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                  <p className="text-[10px] font-semibold text-blue-700 dark:text-blue-400 uppercase">Due</p>
+                </div>
+                <p className="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400 tabular-nums">{formatCurrency(weekDue)}</p>
+              </div>
+              <div className="text-right sm:text-left sm:mt-1.5 space-y-0.5 text-[10px] text-blue-600 dark:text-blue-400">
+                <p><span className="sm:hidden">Got: </span><span className="hidden sm:inline">Got from due: </span><span className="font-semibold tabular-nums">{formatCurrency(collectedFromDue)}</span></p>
+                <p><span className="sm:hidden">Left: </span><span className="hidden sm:inline">Still there: </span><span className="font-semibold tabular-nums">{formatCurrency(weekPendingAmount)}</span></p>
+                <p className="text-blue-500">{filteredWeekPayments.length} EMIs · {weekPendingBorrowers.length + weekPaidBorrowers.length} loans</p>
+              </div>
             </div>
-            <p className="text-lg font-bold text-blue-600 dark:text-blue-400 tabular-nums">{formatCurrency(weekDue)}</p>
-            <div className="mt-1.5 space-y-0.5 text-[10px] text-blue-600 dark:text-blue-400">
-              <p>Got from due: <span className="font-semibold tabular-nums">{formatCurrency(collectedFromDue)}</span></p>
-              <p>Still there: <span className="font-semibold tabular-nums">{formatCurrency(weekPendingAmount)}</span></p>
-            </div>
-            <p className="text-[10px] text-blue-500 mt-1">{filteredWeekPayments.length} EMIs · {weekPendingBorrowers.length + weekPaidBorrowers.length} loans</p>
           </div>
 
           <div className="bg-red-50 dark:bg-red-900/20 rounded-xl p-3 border border-red-200 dark:border-red-800">
-            <div className="flex items-center gap-1.5 mb-1">
-              <AlertCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
-              <p className="text-[10px] font-semibold text-red-700 dark:text-red-400 uppercase">Pending</p>
+            <div className="flex items-center justify-between sm:block">
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <AlertCircle className="w-3.5 h-3.5 text-red-600 dark:text-red-400" />
+                  <p className="text-[10px] font-semibold text-red-700 dark:text-red-400 uppercase">Pending</p>
+                </div>
+                <p className="text-base sm:text-lg font-bold text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(overdueRemaining)}</p>
+              </div>
+              <div className="text-right sm:text-left sm:mt-1.5 space-y-0.5 text-[10px] text-red-600 dark:text-red-400">
+                <p><span className="sm:hidden">Got: </span><span className="hidden sm:inline">Got from pending: </span><span className="font-semibold tabular-nums">{formatCurrency(collectedFromPending)}</span></p>
+                <p><span className="sm:hidden">Left: </span><span className="hidden sm:inline">Still there: </span><span className="font-semibold tabular-nums">{formatCurrency(overdueRemaining)}</span></p>
+                <p className="text-red-500">{filteredOverduePayments.length} week{filteredOverduePayments.length !== 1 ? 's' : ''} unpaid</p>
+              </div>
             </div>
-            <p className="text-lg font-bold text-red-600 dark:text-red-400 tabular-nums">{formatCurrency(overdueRemaining)}</p>
-            <div className="mt-1.5 space-y-0.5 text-[10px] text-red-600 dark:text-red-400">
-              <p>Got from pending: <span className="font-semibold tabular-nums">{formatCurrency(collectedFromPending)}</span></p>
-              <p>Still there: <span className="font-semibold tabular-nums">{formatCurrency(overdueRemaining)}</span></p>
-            </div>
-            <p className="text-[10px] text-red-500 mt-1">{filteredOverduePayments.length} week{filteredOverduePayments.length !== 1 ? 's' : ''} unpaid</p>
           </div>
 
           <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-3 border border-green-200 dark:border-green-800">
-            <div className="flex items-center gap-1.5 mb-1">
-              <Banknote className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
-              <p className="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase">Collected</p>
+            <div className="flex items-center justify-between sm:block">
+              <div>
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Banknote className="w-3.5 h-3.5 text-green-600 dark:text-green-400" />
+                  <p className="text-[10px] font-semibold text-green-700 dark:text-green-400 uppercase">Collected</p>
+                </div>
+                <p className="text-base sm:text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(actualCollectedTotal)}</p>
+              </div>
+              <div className="text-right sm:text-left">
+                <p className="text-[10px] text-green-500">{filteredCollectedPayments.length} payments received</p>
+              </div>
             </div>
-            <p className="text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(actualCollectedTotal)}</p>
-            <p className="text-[10px] text-green-500 mt-0.5">{filteredCollectedPayments.length} payments received</p>
           </div>
         </div>
 
+        {/* Mobile toggle for breakdown details */}
+        {(collectedFromDue > 0 || collectedFromPending > 0 || collectedFromForeclosed > 0 || actualCollectedTotal > 0) && (
+          <button
+            onClick={() => setShowStatsBreakdown(!showStatsBreakdown)}
+            className="sm:hidden mt-2 w-full py-1.5 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 transition-colors flex items-center justify-center gap-1"
+          >
+            {showStatsBreakdown ? 'Hide details' : 'Show details'}
+            {showStatsBreakdown ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+        )}
+
         {/* Collected breakdown: from due, from pending, from foreclosure */}
         {(collectedFromDue > 0 || collectedFromPending > 0 || collectedFromForeclosed > 0) && (
-          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className={`mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 ${showStatsBreakdown ? '' : 'hidden sm:block'}`}>
             <p className="text-[10px] font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">Collected from</p>
             <div className="flex flex-wrap gap-x-6 gap-y-1">
               <div className="flex items-center gap-2">
@@ -662,7 +695,7 @@ export default function WeeklyPayments() {
         )}
         {/* Collected breakdown: Total paid first, then EMI, then extra or partial */}
         {actualCollectedTotal > 0 && (
-          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700">
+          <div className={`mt-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-xl border border-gray-200 dark:border-gray-700 ${showStatsBreakdown ? '' : 'hidden sm:block'}`}>
             <div className="flex items-baseline gap-2 mb-2">
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Total paid this week</span>
               <span className="text-lg font-bold text-green-600 dark:text-green-400 tabular-nums">{formatCurrency(actualCollectedTotal)}</span>
@@ -737,7 +770,8 @@ export default function WeeklyPayments() {
           Collected
           {filteredCollectedPayments.length > 0 && (
             <span className="ml-0.5 px-1.5 py-0.5 text-xs rounded-full bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 font-semibold">
-              {formatCurrency(actualCollectedTotal)}
+              <span className="sm:hidden">{filteredCollectedPayments.length}</span>
+              <span className="hidden sm:inline">{formatCurrency(actualCollectedTotal)}</span>
             </span>
           )}
         </button>

@@ -2,8 +2,9 @@ import { useState, useEffect } from 'react'
 import { Wallet, TrendingUp, AlertCircle, Loader2, Phone, ChevronLeft, ChevronRight, Calendar, IndianRupeeIcon } from 'lucide-react'
 import { useAuth } from '../../contexts/AuthContext'
 import { getPaymentsByWeek, getOverduePayments_all, getPaymentsCollectedInRange, recordPaymentFIFO } from '../../services/paymentService'
+import { getUserSettings } from '../../services/userService'
 import { formatCurrency } from '../../utils/loanCalculations'
-import { formatDate } from '../../utils/dateUtils'
+import { formatDate, getWeekRangeForCollectionDay } from '../../utils/dateUtils'
 
 export default function CollectionsNew() {
   const { user } = useAuth()
@@ -14,21 +15,22 @@ export default function CollectionsNew() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [selectedBorrower, setSelectedBorrower] = useState(null)
   const [showPaymentModal, setShowPaymentModal] = useState(false)
+  const [collectionDay, setCollectionDay] = useState(0)
 
-  // Get week date range
-  const getWeekRange = (offset = 0) => {
-    const today = new Date()
-    const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay() + (offset * 7))
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
-    return { start: weekStart, end: weekEnd }
-  }
-
+  const getWeekRange = (offset = 0) => getWeekRangeForCollectionDay(collectionDay, offset)
   const weekRange = getWeekRange(weekOffset)
 
   useEffect(() => {
+    if (user) {
+      getUserSettings(user.id).then(({ data }) => {
+        if (data?.default_collection_day != null) setCollectionDay(data.default_collection_day)
+      })
+    }
+  }, [user])
+
+  useEffect(() => {
     if (user) loadData()
-  }, [user, weekOffset])
+  }, [user, weekOffset, collectionDay])
 
   const loadData = async () => {
     setLoading(true)

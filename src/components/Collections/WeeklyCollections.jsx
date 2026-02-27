@@ -3,8 +3,9 @@ import { Calendar, Users, Wallet, Loader2, ChevronLeft, ChevronRight, Banknote, 
 import { useAuth } from '../../contexts/AuthContext'
 import { getLoans } from '../../services/loanService'
 import { getPaymentsCollectedInRange } from '../../services/paymentService'
+import { getUserSettings } from '../../services/userService'
 import { formatCurrency } from '../../utils/loanCalculations'
-import { formatDate } from '../../utils/dateUtils'
+import { formatDate, getWeekRangeForCollectionDay } from '../../utils/dateUtils'
 
 export default function WeeklyCollections() {
   const { user } = useAuth()
@@ -14,23 +15,22 @@ export default function WeeklyCollections() {
   const [weekOffset, setWeekOffset] = useState(0)
   const [showCalendar, setShowCalendar] = useState(false)
   const [expandedLeaders, setExpandedLeaders] = useState(new Set())
+  const [collectionDay, setCollectionDay] = useState(0)
 
-  // Get week date range
-  const getWeekRange = (offset = 0) => {
-    const today = new Date()
-    const weekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay() + (offset * 7))
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekEnd.getDate() + 6)
-    return { start: weekStart, end: weekEnd }
-  }
-
+  const getWeekRange = (offset = 0) => getWeekRangeForCollectionDay(collectionDay, offset)
   const weekRange = getWeekRange(weekOffset)
 
   useEffect(() => {
     if (user) {
-      loadData()
+      getUserSettings(user.id).then(({ data }) => {
+        if (data?.default_collection_day != null) setCollectionDay(data.default_collection_day)
+      })
     }
-  }, [user, weekOffset])
+  }, [user])
+
+  useEffect(() => {
+    if (user) loadData()
+  }, [user, weekOffset, collectionDay])
 
   const loadData = async () => {
     setLoading(true)
@@ -48,13 +48,14 @@ export default function WeeklyCollections() {
     setLoading(false)
   }
 
-  // Handle calendar date selection
   const handleDateSelect = (date) => {
-    const selectedDate = new Date(date)
-    const today = new Date()
-    const todayWeekStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay())
-    const selectedWeekStart = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() - selectedDate.getDay())
-    const diffWeeks = Math.round((selectedWeekStart - todayWeekStart) / (7 * 24 * 60 * 60 * 1000))
+    const selected = new Date(date)
+    selected.setHours(0, 0, 0, 0)
+    const daysBack = (selected.getDay() - collectionDay + 7) % 7
+    const selectedWeekStart = new Date(selected)
+    selectedWeekStart.setDate(selected.getDate() - daysBack)
+    const { start: currentStart } = getWeekRangeForCollectionDay(collectionDay, 0)
+    const diffWeeks = Math.round((selectedWeekStart - currentStart) / (7 * 24 * 60 * 60 * 1000))
     setWeekOffset(diffWeeks)
     setShowCalendar(false)
   }

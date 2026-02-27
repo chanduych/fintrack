@@ -120,3 +120,21 @@ export const getWeekNumber = (date) => {
   const yearStart = new Date(d.getFullYear(), 0, 1)
   return Math.ceil((((d - yearStart) / 86400000) + 1) / 7)
 }
+
+/**
+ * Get week date range based on collection day (0=Sun, 1=Mon, ... 6=Sat).
+ * Week runs from collectionDay to collectionDay+6 (e.g. Monday to Sunday if collectionDay=1).
+ * @param {number} collectionDay - First day of week (0=Sunday, 1=Monday, ..., 6=Saturday)
+ * @param {number} offset - Week offset (0=current week, -1=previous, 1=next)
+ * @returns {{ start: Date, end: Date }}
+ */
+export const getWeekRangeForCollectionDay = (collectionDay = 0, offset = 0) => {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const d = today.getDay()
+  const daysBack = (d - collectionDay + 7) % 7
+  const weekStart = new Date(today)
+  weekStart.setDate(today.getDate() - daysBack + (offset * 7))
+  const weekEnd = addDays(weekStart, 6)
+  return { start: weekStart, end: weekEnd }
+}
